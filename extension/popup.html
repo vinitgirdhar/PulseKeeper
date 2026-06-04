@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PulseKeeper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="popup">
+  <header class="header">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="12" fill="#0b1d3a"/>
+        <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34"
+          fill="none" stroke="#60cdff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>PulseKeeper</span>
+    </div>
+    <div class="status-dot" id="statusDot" title="Checking connection…"></div>
+  </header>
+
+  <div class="page-info" id="pageInfo">
+    <div class="page-title" id="pageTitle">Loading…</div>
+    <div class="page-url" id="pageUrl"></div>
+  </div>
+
+  <div class="selection-preview" id="selectionRow" style="display:none">
+    <div class="selection-label">Selected text:</div>
+    <div class="selection-text" id="selectionText"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" id="btnSendPage">
+      <span class="btn-icon">📄</span> Send page
+    </button>
+    <button class="btn secondary" id="btnSendSelection" disabled>
+      <span class="btn-icon">✂️</span> Send selection
+    </button>
+  </div>
+
+  <div class="status-msg" id="statusMsg"></div>
+
+  <footer class="footer">
+    <a href="#" id="openSettings">Open PulseKeeper ↗</a>
+    <span id="connectionStatus">Connecting…</span>
+  </footer>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
