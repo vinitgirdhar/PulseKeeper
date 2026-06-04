@@ -51,6 +51,11 @@
     .popup-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
     .popup-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
     .popup-btn.primary:hover { background: #006cbe; }
+    .pk-icon { display: inline-block; vertical-align: -0.14em; flex-shrink: 0; }
+    .popup-btn .pk-icon { width: 15px; height: 15px; vertical-align: middle; }
+    .popup-btn { display: inline-flex; align-items: center; gap: 4px; }
+    .item-icon .pk-icon { width: 18px; height: 18px; }
+    .filter-chip .pk-icon { width: 13px; height: 13px; }
     .filter-row-wrap {
       position: relative; flex-shrink: 0; border-bottom: 1px solid var(--border);
     }
@@ -127,10 +132,10 @@
       PulseKeeper
     </div>
     <div class="popup-actions">
-      <button class="popup-btn" id="btnCopy" title="Copy visible items as Markdown">📋</button>
-      <button class="popup-btn" id="btnMarkAllRead" title="Mark all as read">✓ Read</button>
-      <button class="popup-btn" id="btnRefreshPopup" title="Refresh">🔄</button>
-      <button class="popup-btn" id="btnSettings" title="Settings">⚙️</button>
+      <button class="popup-btn" id="btnCopy" title="Copy visible items as Markdown" aria-label="Copy" data-icon="copy"></button>
+      <button class="popup-btn" id="btnMarkAllRead" title="Mark all as read"><span data-icon="check"></span> Read</button>
+      <button class="popup-btn" id="btnRefreshPopup" title="Refresh" aria-label="Refresh" data-icon="refresh"></button>
+      <button class="popup-btn" id="btnSettings" title="Settings" aria-label="Settings" data-icon="settings"></button>
       <button class="popup-btn primary" id="btnViewAll">Digest</button>
     </div>
   </div>
@@ -141,7 +146,7 @@
   </div>
   <div style="padding:5px 12px 0;flex-shrink:0">
     <div style="position:relative">
-      <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none;opacity:0.5">🔍</span>
+      <span data-icon="search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.55;display:flex"></span>
       <input id="popupSearch" type="search" placeholder="Search…" autocomplete="off"
         style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;
                padding:4px 8px 4px 28px;color:var(--text);font-size:11px;font-family:var(--font);outline:none;box-sizing:border-box">
@@ -156,6 +161,7 @@
   </div>
 </div>
 <div class="copy-toast" id="copyToast">Copied to clipboard!</div>
+<script src="icons.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

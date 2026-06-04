@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS = {
   },
   muteWords: [],
   historyMaxCount: 10,
+  seededSourceIds: [],
   llm: {
     enabled: false,
     provider: 'anthropic',
@@ -74,6 +75,152 @@ const DEFAULT_SOURCES = [
     config: { subreddit: 'technology' },
     maxItems: 10,
     icon: 'reddit'
+  },
+
+  // ── Cybersecurity ──
+  {
+    id: uuidv4(),
+    name: 'The Hacker News',
+    seedId: 'cyber-thn',
+    type: 'rss',
+    enabled: true,
+    config: { url: 'https://feeds.feedburner.com/TheHackersNews' },
+    maxItems: 12,
+    icon: 'rss'
+  },
+  {
+    id: uuidv4(),
+    name: 'BleepingComputer',
+    seedId: 'cyber-bleeping',
+    type: 'rss',
+    enabled: true,
+    config: { url: 'https://www.bleepingcomputer.com/feed/' },
+    maxItems: 12,
+    icon: 'rss'
+  },
+  {
+    id: uuidv4(),
+    name: 'Krebs on Security',
+    seedId: 'cyber-krebs',
+    type: 'blog',
+    enabled: true,
+    config: { url: 'https://krebsonsecurity.com/feed/' },
+    maxItems: 10,
+    icon: 'blog'
+  },
+  {
+    id: uuidv4(),
+    name: 'Dark Reading',
+    seedId: 'cyber-darkreading',
+    type: 'rss',
+    enabled: true,
+    config: { url: 'https://www.darkreading.com/rss.xml' },
+    maxItems: 12,
+    icon: 'rss'
+  },
+  {
+    id: uuidv4(),
+    name: 'The Record',
+    seedId: 'cyber-therecord',
+    type: 'rss',
+    enabled: true,
+    config: { url: 'https://therecord.media/feed' },
+    maxItems: 10,
+    icon: 'rss'
+  },
+  {
+    id: uuidv4(),
+    name: 'r/cybersecurity',
+    seedId: 'cyber-r-cybersecurity',
+    type: 'reddit',
+    enabled: true,
+    config: { subreddit: 'cybersecurity', sort: 'hot' },
+    maxItems: 10,
+    icon: 'reddit'
+  },
+  {
+    id: uuidv4(),
+    name: 'r/netsec',
+    seedId: 'cyber-r-netsec',
+    type: 'reddit',
+    enabled: true,
+    config: { subreddit: 'netsec', sort: 'hot' },
+    maxItems: 10,
+    icon: 'reddit'
+  },
+
+  // ── Sequretek ──
+  {
+    id: uuidv4(),
+    name: 'Sequretek Blog',
+    seedId: 'sequretek-blog',
+    type: 'blog',
+    enabled: true,
+    config: { url: 'https://www.sequretek.com/feed/' },
+    maxItems: 10,
+    icon: 'blog'
+  },
+
+  // ── AI News ──
+  {
+    id: uuidv4(),
+    name: 'OpenAI News',
+    seedId: 'ai-openai',
+    type: 'blog',
+    enabled: true,
+    config: { url: 'https://openai.com/news/rss.xml' },
+    maxItems: 10,
+    icon: 'blog'
+  },
+  {
+    id: uuidv4(),
+    name: 'Google DeepMind Blog',
+    seedId: 'ai-deepmind',
+    type: 'blog',
+    enabled: true,
+    config: { url: 'https://deepmind.google/blog/rss.xml' },
+    maxItems: 10,
+    icon: 'blog'
+  },
+  {
+    id: uuidv4(),
+    name: 'Hugging Face Blog',
+    seedId: 'ai-huggingface',
+    type: 'blog',
+    enabled: true,
+    config: { url: 'https://huggingface.co/blog/feed.xml' },
+    maxItems: 10,
+    icon: 'blog'
+  },
+  {
+    id: uuidv4(),
+    name: 'VentureBeat AI',
+    seedId: 'ai-venturebeat',
+    type: 'rss',
+    enabled: true,
+    config: { url: 'https://venturebeat.com/category/ai/feed/' },
+    maxItems: 12,
+    icon: 'rss'
+  },
+  {
+    id: uuidv4(),
+    name: 'MIT Tech Review — AI',
+    seedId: 'ai-mit-techreview',
+    type: 'rss',
+    enabled: true,
+    config: { url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed' },
+    maxItems: 10,
+    icon: 'rss'
+  },
+  {
+    id: uuidv4(),
+    name: 'r/artificial',
+    seedId: 'ai-r-artificial',
+    type: 'reddit',
+    enabled: true,
+    config: { subreddit: 'artificial', sort: 'hot' },
+    maxItems: 10,
+    icon: 'reddit'
   }
 ];
 
@@ -101,6 +248,35 @@ class Storage {
     }
     if (!fs.existsSync(SETTINGS_FILE)) await this._write(SETTINGS_FILE, DEFAULT_SETTINGS);
     if (!fs.existsSync(SOURCES_FILE))  await this._write(SOURCES_FILE, DEFAULT_SOURCES);
+    await this._seedCuratedSources();
+  }
+
+  // Add curated default sources (cybersecurity / Sequretek / AI) to existing
+  // installs exactly once. Sources carry a stable `seedId`; once a seedId has
+  // been seeded it's never re-added, so deleting one won't bring it back.
+  async _seedCuratedSources() {
+    const curated = DEFAULT_SOURCES.filter(s => s.seedId);
+    if (!curated.length) return;
+    const settings = await this.getSettings();
+    const seeded = new Set(settings.seededSourceIds || []);
+    const sources = await this.getSources();
+    const present = new Set(sources.filter(s => s.seedId).map(s => s.seedId));
+    let changed = false;
+    for (const def of curated) {
+      if (present.has(def.seedId)) {           // already in sources.json (fresh install)
+        if (!seeded.has(def.seedId)) { seeded.add(def.seedId); changed = true; }
+        continue;
+      }
+      if (seeded.has(def.seedId)) continue;    // seeded before, user removed it — leave it gone
+      sources.push({ ...def, id: uuidv4() });
+      seeded.add(def.seedId);
+      changed = true;
+    }
+    if (changed) {
+      await this.saveSources(sources);
+      settings.seededSourceIds = [...seeded];
+      await this.saveSettings(settings);
+    }
   }
 
   // ─── Settings ────────────────────────────────────────────────────────────────

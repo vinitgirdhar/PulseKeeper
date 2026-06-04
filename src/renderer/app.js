@@ -1,6 +1,7 @@
 'use strict';
 
 const api = window.pcbAPI;
+const icon = (name, size) => window.PKIcons.icon(name, size);
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let sourceTypes = [];
@@ -67,10 +68,10 @@ function renderSourceList() {
   const visible = sources.filter(s => s.type !== 'web-capture');
   if (!visible.length) {
     container.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">📡</div>
+      <div class="empty-icon">${icon('sources', 44)}</div>
       <h3>No sources yet</h3>
       <p>Add your first content source to get started</p>
-      <button class="btn btn-primary" data-action="add-source">+ Add Source</button>
+      <button class="btn btn-primary" data-action="add-source">${icon('plus')} Add Source</button>
     </div>`;
     return;
   }
@@ -79,7 +80,7 @@ function renderSourceList() {
 
 function renderSourceCard(source) {
   const typeInfo = sourceTypes.find(t => t.id === source.type) || {};
-  const icon = getSourceIcon(source.type);
+  const typeIcon = getSourceIcon(source.type);
   const typeClass = `type-${source.type}`;
   const h = sourceHealth[source.id] || {};
   const healthHTML = renderHealthBadge(h, source);
@@ -90,21 +91,21 @@ function renderSourceCard(source) {
   const muteBadge = source.ignoreMute ? ' <span style="font-size:10px;background:rgba(255,193,7,0.15);color:#ffc107;border:1px solid rgba(255,193,7,0.3);border-radius:4px;padding:1px 5px" title="Bypasses global mute words">Unmuted</span>' : '';
 
   return `<div class="source-card ${source.enabled ? '' : 'disabled'}" id="source-${source.id}">
-    <div class="source-icon ${typeClass}">${icon}</div>
+    <div class="source-icon ${typeClass}">${typeIcon}</div>
     <div class="source-info">
       <div class="source-name">${escapeHTML(source.name)}${playlistBadge}${muteBadge}</div>
-      <div class="source-meta">${typeInfo.label || source.type} · Max ${source.maxItems || 20} items${source.refreshInterval ? ` · ⏱ ${source.refreshInterval}m` : ''}</div>
+      <div class="source-meta">${typeInfo.label || source.type} · Max ${source.maxItems || 20} items${source.refreshInterval ? ` · ${icon('clock')} ${source.refreshInterval}m` : ''}</div>
       ${healthHTML}
     </div>
     <div class="source-actions">
       <span class="source-status pending" id="status-${source.id}">—</span>
-      <button class="btn btn-ghost btn-sm btn-icon" title="Refresh now" data-action="refresh" data-id="${source.id}">🔄</button>
-      ${source.type !== 'web-capture' ? `<button class="btn btn-ghost btn-sm btn-icon" title="Edit" data-action="edit" data-id="${source.id}">✏️</button>` : ''}
+      <button class="btn btn-ghost btn-sm btn-icon" title="Refresh now" aria-label="Refresh now" data-action="refresh" data-id="${source.id}">${icon('refresh')}</button>
+      ${source.type !== 'web-capture' ? `<button class="btn btn-ghost btn-sm btn-icon" title="Edit" aria-label="Edit" data-action="edit" data-id="${source.id}">${icon('edit')}</button>` : ''}
       <label class="toggle" title="${source.enabled ? 'Disable' : 'Enable'}">
         <input type="checkbox" ${source.enabled ? 'checked' : ''} data-action="toggle" data-id="${source.id}">
         <span class="toggle-slider"></span>
       </label>
-      <button class="btn btn-ghost btn-sm btn-icon" title="Delete" data-action="delete" data-id="${source.id}">🗑️</button>
+      <button class="btn btn-ghost btn-sm btn-icon" title="Delete" aria-label="Delete" data-action="delete" data-id="${source.id}">${icon('trash')}</button>
     </div>
   </div>`;
 }
@@ -113,10 +114,10 @@ function renderHealthBadge(h, source) {
   if (!h.lastFetchedAt) return '';
   const ago = relativeTimeShort(h.lastFetchedAt);
   if (h.lastError) {
-    return `<div class="source-health"><span class="health-err" title="${escapeHTML(h.lastError)}">⚠ Error · ${ago}</span></div>`;
+    return `<div class="source-health"><span class="health-err" title="${escapeHTML(h.lastError)}">${icon('warning')} Error · ${ago}</span></div>`;
   }
   const newTxt = h.lastNewCount != null ? ` · +${h.lastNewCount} new` : '';
-  return `<div class="source-health"><span class="health-ok">✓ ${ago}${newTxt}</span></div>`;
+  return `<div class="source-health"><span class="health-ok">${icon('check')} ${ago}${newTxt}</span></div>`;
 }
 
 function relativeTimeShort(dateStr) {
@@ -226,7 +227,7 @@ function renderSourceFields(type, existing) {
         <label class="form-label">${field.label}${field.required ? ' *' : ''}</label>
         <div class="input-with-action">
           <input type="url" class="input" data-field="${field.key}" value="${escapeHTML(String(val))}" placeholder="${escapeHTML(field.placeholder || '')}">
-          <button class="btn btn-secondary btn-sm btn-discover" data-discover-field="${field.key}" title="Auto-discover RSS feed from any webpage URL">🔍 Discover</button>
+          <button class="btn btn-secondary btn-sm btn-discover" data-discover-field="${field.key}" title="Auto-discover RSS feed from any webpage URL">${icon('search')} Discover</button>
         </div>
         ${field.hint ? `<div class="form-hint">${escapeHTML(field.hint)}</div>` : ''}
       </div>`;
@@ -422,14 +423,14 @@ function renderLLMTestResult({ state, result, message }) {
   if (state === 'success') {
     panel.className = 'llm-test-result success';
     panel.innerHTML =
-      `<div class="ltr-head">✅ Connection successful</div>` +
+      `<div class="ltr-head">${icon('check')} Connection successful</div>` +
       `<div class="ltr-meta">${escapeHTML(result.provider)} · ${escapeHTML(result.model)} · ${result.latencyMs} ms</div>` +
       `<div class="ltr-reply"><span class="ltr-label">Model replied:</span> ${escapeHTML(result.reply)}</div>`;
     return;
   }
   panel.className = 'llm-test-result error';
   panel.innerHTML =
-    `<div class="ltr-head">❌ Connection failed</div>` +
+    `<div class="ltr-head">${icon('warning')} Connection failed</div>` +
     `<div class="ltr-reply">${escapeHTML(message)}</div>`;
 }
 
@@ -444,7 +445,9 @@ function applyTheme() {
 
 function updateThemeButton(theme) {
   const btn = document.getElementById('btnThemeToggle');
-  if (btn) btn.textContent = theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
+  if (btn) btn.innerHTML = theme === 'light'
+    ? `${icon('moon')} <span class="theme-label">Dark Mode</span>`
+    : `${icon('sun')} <span class="theme-label">Light Mode</span>`;
 }
 
 async function toggleTheme() {
@@ -496,22 +499,22 @@ async function loadHistory() {
 async function loadHealthDashboard() {
   const container = document.getElementById('healthList');
   if (!container) return;
-  container.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>';
+  container.innerHTML = '<div class="empty-state"><span class="spinner"></span><p>Loading…</p></div>';
 
   const [allSources, health] = await Promise.all([api.sources.list(), api.sources.getHealth()]);
 
   if (!allSources.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><h3>No sources</h3><p>Add sources to see health metrics</p></div>';
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${icon('health', 44)}</div><h3>No sources</h3><p>Add sources to see health metrics</p></div>`;
     return;
   }
 
   container.innerHTML = allSources.map(source => {
     const h = health[source.id] || {};
-    const icon = getSourceIcon(source.type);
+    const typeIcon = getSourceIcon(source.type);
     const ago = h.lastFetchedAt ? relativeTimeShort(h.lastFetchedAt) : 'Never';
     const hasError = !!h.lastError;
     const statusColor = !h.lastFetchedAt ? 'var(--text-disabled)' : hasError ? 'var(--red)' : '#6ccb5f';
-    const statusIcon = !h.lastFetchedAt ? '○' : hasError ? '✕' : '✓';
+    const statusIcon = !h.lastFetchedAt ? icon('circle') : hasError ? icon('close') : icon('check');
 
     const metrics = [
       { label: 'Last Fetch',  value: ago },
@@ -522,7 +525,7 @@ async function loadHealthDashboard() {
 
     return `<div class="source-card" style="flex-direction:column;gap:10px;align-items:stretch">
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="source-icon type-${source.type}">${icon}</div>
+        <div class="source-icon type-${source.type}">${typeIcon}</div>
         <div class="source-info" style="flex:1;min-width:0">
           <div class="source-name">${escapeHTML(source.name)}</div>
           <div class="source-meta">${source.type}${source.enabled ? '' : ' · <span style="color:var(--text-disabled)">disabled</span>'}</div>
@@ -535,7 +538,7 @@ async function loadHealthDashboard() {
           <div style="font-size:13px;font-weight:500;color:${m.label==='Status'&&hasError?'var(--red)':m.label==='Status'&&h.lastFetchedAt?'#6ccb5f':'var(--text)'}">${m.value}</div>
         </div>`).join('')}
       </div>
-      ${hasError ? `<div style="background:rgba(209,52,56,0.1);border:1px solid rgba(209,52,56,0.3);border-radius:6px;padding:8px;font-size:11px;color:#fc8c8c">⚠ ${escapeHTML(h.lastError)}</div>` : ''}
+      ${hasError ? `<div style="background:rgba(209,52,56,0.1);border:1px solid rgba(209,52,56,0.3);border-radius:6px;padding:8px;font-size:11px;color:#fc8c8c">${icon('warning')} ${escapeHTML(h.lastError)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -545,8 +548,8 @@ async function handleDiscoverFeed(fieldKey) {
   const input = document.querySelector(`#sourceFields [data-field="${fieldKey}"]`);
   if (!input || !input.value.trim()) { showToast('Enter a URL first', 'error'); return; }
   const btn = document.querySelector(`[data-discover-field="${fieldKey}"]`);
-  const origText = btn.textContent;
-  btn.disabled = true; btn.textContent = '⏳';
+  const origHTML = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   try {
     const feedUrl = await api.sources.discoverFeed(input.value.trim());
     if (feedUrl) {
@@ -558,7 +561,7 @@ async function handleDiscoverFeed(fieldKey) {
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
-    btn.disabled = false; btn.textContent = origText;
+    btn.disabled = false; btn.innerHTML = origHTML;
   }
 }
 
@@ -572,6 +575,10 @@ async function exportAgentPack(scriptOnly) {
 }
 
 // ─── Extension / Server status ────────────────────────────────────────────────
+function statusDot(color) {
+  return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle"></span>`;
+}
+
 async function checkServerStatus() {
   const el = document.getElementById('serverStatus');
   if (!el) return;
@@ -579,12 +586,12 @@ async function checkServerStatus() {
     const res = await fetch('http://localhost:7828/status');
     const data = await res.json();
     if (data.ok) {
-      el.innerHTML = '<span style="color:#6ccb5f">● Running on port 7828</span>';
+      el.innerHTML = `${statusDot('#6ccb5f')}<span style="color:#6ccb5f">Running on port 7828</span>`;
     } else {
-      el.innerHTML = '<span style="color:#fc5353">● Not responding</span>';
+      el.innerHTML = `${statusDot('#fc5353')}<span style="color:#fc5353">Not responding</span>`;
     }
   } catch {
-    el.innerHTML = '<span style="color:#fc5353">● Not reachable — is PulseKeeper running?</span>';
+    el.innerHTML = `${statusDot('#fc5353')}<span style="color:#fc5353">Not reachable — is PulseKeeper running?</span>`;
   }
 }
 
@@ -709,8 +716,7 @@ function escapeHTML(s) {
 }
 
 function getSourceIcon(type) {
-  const m = { rss:'📡', podcast:'🎙️', youtube:'▶️', reddit:'🔴', newsletter:'📧', blog:'✍️', webpage:'🌐', 'web-capture':'🧩' };
-  return m[type] || '📄';
+  return icon(type);
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────────────
