@@ -11,6 +11,7 @@ let editingSourceId = null;
 async function init() {
   sourceTypes = await api.sources.types();
   await loadSources();
+  await loadFeed();
   await loadSettings();
   await loadLLMSettings();
   setupNavigation();
@@ -23,6 +24,7 @@ async function init() {
   api.on.collectComplete(({ succeeded, failed }) => {
     setStatus(`Updated — ${succeeded} source${succeeded !== 1 ? 's' : ''} refreshed`);
     loadSources();
+    loadFeed();
   });
   api.on.collectError(({ name, error }) => showToast(`Error in ${name}: ${error}`, 'error'));
   api.on.navigate(tab => switchTab(tab));
@@ -51,6 +53,7 @@ function switchTab(tabId) {
   if (tabId === 'extension') checkServerStatus();
   if (tabId === 'export') loadExportTab();
   if (tabId === 'health') loadHealthDashboard();
+  if (tabId === 'feed') loadFeed();
 }
 
 // ─── Sources ──────────────────────────────────────────────────────────────────
@@ -588,6 +591,112 @@ async function checkServerStatus() {
   }
 }
 
+// ─── Content / Feed ────────────────────────────────────────────────────────────
+const FEED_COLORS = {
+  rss:'#f26522', podcast:'#9b59b6', youtube:'#ff0000', reddit:'#ff4500',
+  newsletter:'#0078d4', blog:'#2ecc71', webpage:'#16a085', 'web-capture':'#8e44ad'
+};
+let feedItems = [];
+let feedReadIds = new Set();
+let feedFilter = 'all';
+let feedSearch = '';
+
+async function loadFeed() {
+  const list = document.getElementById('feedList');
+  if (list && !feedItems.length) list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  try {
+    const [items, readArr] = await Promise.all([api.content.getAll(), api.content.getReadIds()]);
+    feedItems = items;
+    feedReadIds = new Set(readArr);
+    renderFeedFilters();
+    renderFeedItems();
+    updateFeedBadge();
+  } catch (e) {
+    if (list) list.innerHTML = `<div class="empty-state"><h3>Failed to load</h3><p>${escapeHTML(e.message)}</p></div>`;
+  }
+}
+
+function updateFeedBadge() {
+  const badge = document.getElementById('feedBadge');
+  if (badge) badge.textContent = feedItems.filter(i => !feedReadIds.has(i.id)).length;
+}
+
+function renderFeedFilters() {
+  const row = document.getElementById('feedFilters');
+  if (!row) return;
+  const types = [...new Set(feedItems.map(i => i.sourceType).filter(Boolean))];
+  const chips = [`<button class="feed-chip ${feedFilter === 'all' ? 'active' : ''}" data-filter="all">All <span class="chip-count">${feedItems.length}</span></button>`];
+  for (const t of types) {
+    const n = feedItems.filter(i => i.sourceType === t).length;
+    chips.push(`<button class="feed-chip ${feedFilter === t ? 'active' : ''}" data-filter="${t}">${getSourceIcon(t)} ${escapeHTML(t)} <span class="chip-count">${n}</span></button>`);
+  }
+  row.innerHTML = chips.join('');
+}
+
+function getFilteredFeed() {
+  let f = feedFilter === 'all' ? feedItems : feedItems.filter(i => i.sourceType === feedFilter);
+  if (feedSearch) {
+    f = f.filter(i =>
+      (i.title || '').toLowerCase().includes(feedSearch) ||
+      (i.description || '').toLowerCase().includes(feedSearch));
+  }
+  return f;
+}
+
+function renderFeedItems() {
+  const list = document.getElementById('feedList');
+  if (!list) return;
+  const items = getFilteredFeed();
+  if (!items.length) {
+    const msg = feedItems.length ? 'Nothing matches your filter or search.' : 'Refresh your sources to collect content.';
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><h3>No items</h3><p>${msg}</p></div>`;
+    return;
+  }
+  list.innerHTML = items.map(renderFeedItem).join('');
+}
+
+function renderFeedItem(item) {
+  const color = FEED_COLORS[item.sourceType] || '#666';
+  const isRead = feedReadIds.has(item.id);
+  const thumb = item.thumbnail
+    ? `<img class="feed-thumb" src="${escapeHTML(item.thumbnail)}" alt="" onerror="this.style.display='none'">`
+    : `<div class="feed-icon">${getSourceIcon(item.sourceType)}</div>`;
+  return `<div class="feed-item ${isRead ? 'read' : ''}" data-id="${escapeHTML(item.id)}" data-url="${escapeHTML(item.url || '')}">
+    ${thumb}
+    <div class="feed-body">
+      <div class="feed-title">${escapeHTML(item.title || '(no title)')}</div>
+      ${item.description ? `<div class="feed-desc">${escapeHTML(item.description)}</div>` : ''}
+      <div class="feed-meta">
+        <span class="feed-source" style="background:${color}">${escapeHTML(item.sourceName || item.sourceType || '')}</span>
+        <span class="feed-date">${relativeTimeShort(item.publishedAt)}</span>
+        ${isRead ? '' : '<span class="feed-unread-dot" title="Unread"></span>'}
+      </div>
+    </div>
+  </div>`;
+}
+
+function openFeedItem(id, url) {
+  if (url) api.ui.openExternal(url);
+  if (!feedReadIds.has(id)) {
+    feedReadIds.add(id);
+    api.content.markRead([id]);
+    const el = document.querySelector(`.feed-item[data-id="${CSS.escape(id)}"]`);
+    if (el) { el.classList.add('read'); const dot = el.querySelector('.feed-unread-dot'); if (dot) dot.remove(); }
+    updateFeedBadge();
+    renderFeedFilters();
+  }
+}
+
+async function feedMarkAllRead() {
+  if (!feedItems.length) return;
+  await api.content.markAllRead();
+  feedItems.forEach(i => feedReadIds.add(i.id));
+  renderFeedItems();
+  renderFeedFilters();
+  updateFeedBadge();
+  showToast('All items marked as read');
+}
+
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 function showModal() {
   const overlay = document.getElementById('addSourceModal');
@@ -636,6 +745,30 @@ function setupEventListeners() {
   document.getElementById('llmProvider').addEventListener('change', e => {
     updateModelDropdown(e.target.value, null);
     updateCustomURLVisibility(e.target.value);
+  });
+
+  // Content / Feed tab
+  document.getElementById('btnFeedRefresh').addEventListener('click', async () => {
+    setStatus('Collecting all sources…', true);
+    try { await api.sources.collectAll(); await loadFeed(); }
+    catch (e) { showToast(e.message, 'error'); }
+    finally { setStatus('Ready', false); }
+  });
+  document.getElementById('btnFeedMarkAllRead').addEventListener('click', feedMarkAllRead);
+  document.getElementById('feedSearch').addEventListener('input', e => {
+    feedSearch = e.target.value.trim().toLowerCase();
+    renderFeedItems();
+  });
+  document.getElementById('feedFilters').addEventListener('click', e => {
+    const chip = e.target.closest('[data-filter]');
+    if (!chip) return;
+    feedFilter = chip.dataset.filter;
+    renderFeedFilters();
+    renderFeedItems();
+  });
+  document.getElementById('feedList').addEventListener('click', e => {
+    const card = e.target.closest('.feed-item');
+    if (card) openFeedItem(card.dataset.id, card.dataset.url);
   });
 
   // Source list — delegated click and change handlers

@@ -38,7 +38,8 @@ function renderHTML(items, options = {}) {
     readIds = new Set(),
     digestBrowser = 'internal',
     previousItemIds = new Set(),
-    digestFontSize = 'medium'
+    digestFontSize = 'medium',
+    sourceErrors = []
   } = options;
 
   const fontSizeMap = { small: '12px', medium: '14px', large: '17px' };
@@ -77,6 +78,14 @@ function renderHTML(items, options = {}) {
     <section class="ai-digest">
       <h2>🤖 AI Digest</h2>
       <div class="ai-content">${marked.parse(aiDigest)}</div>
+    </section>` : '';
+
+  const errorBanner = (sourceErrors && sourceErrors.length) ? `
+    <section class="error-banner">
+      <div class="error-banner-head">⚠️ ${sourceErrors.length} source${sourceErrors.length !== 1 ? 's' : ''} could not be fetched</div>
+      <ul class="error-banner-list">
+        ${sourceErrors.map(e => `<li><strong>${escapeHTML(e.name || 'Unknown source')}</strong> — ${escapeHTML(e.error || 'Unknown error')}</li>`).join('')}
+      </ul>
     </section>` : '';
 
   return `<!DOCTYPE html>
@@ -204,6 +213,16 @@ function renderHTML(items, options = {}) {
       padding: 24px;
       margin-bottom: 32px;
     }
+    .error-banner {
+      background: rgba(209,52,56,0.1);
+      border: 1px solid rgba(209,52,56,0.4);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+    .error-banner-head { font-size: 14px; font-weight: 600; color: #ff8a8a; margin-bottom: 8px; }
+    .error-banner-list { margin: 0; padding-left: 20px; font-size: 13px; color: var(--text2); line-height: 1.7; }
+    .error-banner-list strong { color: var(--text); }
     .ai-digest h2 { font-size: 16px; margin-bottom: 16px; color: var(--accent2); }
     .ai-content { font-size: 14px; line-height: 1.7; color: var(--text); }
     .ai-content h1,.ai-content h2,.ai-content h3 { color: var(--accent2); margin: 16px 0 8px; }
@@ -377,6 +396,7 @@ function renderHTML(items, options = {}) {
       ${sidebarHTML}
     </nav>
     <main class="main">
+      ${errorBanner}
       ${aiSection}
       <div class="search-bar">
         <div class="search-wrap">

@@ -28,6 +28,11 @@
         <span>Sources</span>
         <span class="nav-badge" id="sourceBadge">0</span>
       </div>
+      <div class="nav-item" data-tab="feed">
+        <span class="nav-icon">📰</span>
+        <span>Content</span>
+        <span class="nav-badge" id="feedBadge">0</span>
+      </div>
       <div class="nav-item" data-tab="settings">
         <span class="nav-icon">⚙️</span>
         <span>Settings</span>
@@ -80,6 +85,27 @@
           <p>Add your first content source to get started</p>
           <button class="btn btn-primary" onclick="openAddSource()">+ Add Source</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Content / Feed Tab ── -->
+    <div id="tab-feed" class="tab-content" style="display:none">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Content</div>
+          <div class="page-subtitle">All items collected from your sources</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary" id="btnFeedMarkAllRead">✓ Mark all read</button>
+          <button class="btn btn-secondary" id="btnFeedRefresh">🔄 Refresh All</button>
+        </div>
+      </div>
+      <div class="feed-toolbar">
+        <input type="text" class="input feed-search" id="feedSearch" placeholder="Search title or description…">
+        <div class="feed-filters" id="feedFilters"></div>
+      </div>
+      <div class="feed-list" id="feedList">
+        <div class="empty-state"><div class="empty-icon">📰</div><h3>Loading…</h3></div>
       </div>
     </div>
 

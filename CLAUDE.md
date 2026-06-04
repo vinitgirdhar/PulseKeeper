@@ -31,7 +31,7 @@ There is **no test suite, linter, or typecheck** configured. Don't invent comman
 taskbar, behind the `^` arrow). The tray icon is a dark-blue square with a cyan EKG line.
 
 - **Right-click tray → ⚙️ Settings** → opens the main window ([src/renderer/index.html](src/renderer/index.html)),
-  whose left sidebar has the tabs: Sources, Settings, **AI / LLM**, Health, Export, Extension, About.
+  whose left sidebar has the tabs: Sources, **Content** (in-window reader for all collected items), Settings, **AI / LLM**, Health, Export, Extension, About.
 - **Left-click tray** → small content popup ([src/renderer/popup.html](src/renderer/popup.html)).
 - **Double-click tray** → opens the digest viewer.
 

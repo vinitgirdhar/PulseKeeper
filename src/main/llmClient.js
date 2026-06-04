@@ -62,6 +62,17 @@ function buildClient(llmConfig) {
   });
 }
 
+// Build the chat.completions params, applying provider-specific quirks.
+function chatParams(llmConfig, messages, maxTokens, temperature) {
+  const params = { model: llmConfig.model, messages, max_tokens: maxTokens, temperature };
+  // Gemini 2.5 models spend hidden "thinking" tokens that count against
+  // max_tokens — they can starve or truncate the visible answer (e.g. a digest
+  // cut off mid-sentence). We don't need reasoning for summarize/echo tasks, so
+  // turn it off and give the whole budget to the actual output.
+  if (llmConfig.provider === 'gemini') params.reasoning_effort = 'none';
+  return params;
+}
+
 // Turn raw SDK / network errors into a short, actionable sentence.
 function friendlyError(err, provider) {
   const status = err?.status ?? err?.response?.status;
@@ -119,12 +130,9 @@ async function testConnection(llmConfig) {
   const client = buildClient(llmConfig);
   const started = Date.now();
   try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [{ role: 'user', content: 'Reply with exactly: PulseKeeper connection OK' }],
-      max_tokens: 32,
-      temperature: 0
-    });
+    const response = await client.chat.completions.create(
+      chatParams(llmConfig, [{ role: 'user', content: 'Reply with exactly: PulseKeeper connection OK' }], 64, 0)
+    );
     const reply = response.choices?.[0]?.message?.content?.trim() || '(model returned an empty response)';
     return { ok: true, provider, model, reply, latencyMs: Date.now() - started };
   } catch (err) {
@@ -145,15 +153,12 @@ async function generateDigest(llmConfig, contentItems) {
   const userPrompt = `${digestPrompt || 'Summarize the following content into a daily digest:'}\n\n${contentText}`;
 
   try {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
+    const response = await client.chat.completions.create(
+      chatParams(llmConfig, [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.5,
-      max_tokens: 2000
-    });
+      ], 4000, 0.5)
+    );
     return response.choices[0]?.message?.content || '';
   } catch (err) {
     throw new Error(friendlyError(err, provider));
