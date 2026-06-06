@@ -10,6 +10,17 @@ const SOURCE_COLORS = {
 // Source-type glyphs come from the shared SF-style icon set (icons.js).
 const srcIcon = (type) => window.PKIcons.icon(type);
 
+// Auto-hide scrollbars: reveal while scrolling, hide ~0.8s after idle.
+(function setupAutoHideScrollbars() {
+  let idle;
+  const root = document.documentElement;
+  window.addEventListener('scroll', () => {
+    root.classList.add('scrolling');
+    clearTimeout(idle);
+    idle = setTimeout(() => root.classList.remove('scrolling'), 800);
+  }, true);
+})();
+
 let allItems = [];
 let readIds = new Set();
 let activeFilter = 'all';

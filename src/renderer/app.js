@@ -3,6 +3,18 @@
 const api = window.pcbAPI;
 const icon = (name, size) => window.PKIcons.icon(name, size);
 
+// Auto-hide scrollbars: reveal thumbs while scrolling, hide ~0.8s after idle.
+// Capture phase catches scroll on any nested scroller (scroll doesn't bubble).
+(function setupAutoHideScrollbars() {
+  let idle;
+  const root = document.documentElement;
+  window.addEventListener('scroll', () => {
+    root.classList.add('scrolling');
+    clearTimeout(idle);
+    idle = setTimeout(() => root.classList.remove('scrolling'), 800);
+  }, true);
+})();
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let sourceTypes = [];
 let sources = [];

@@ -128,9 +128,16 @@ function renderHTML(items, options = {}) {
       --nav-h: 0px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { scrollbar-width: none; -ms-overflow-style: none; }
-    /* Hide scrollbars everywhere in the digest window (scrolling still works) */
-    ::-webkit-scrollbar { width: 0; height: 0; display: none; }
+    /* Thin auto-hide scrollbars — invisible when idle, fade in while scrolling/hovering */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: transparent; border: 2px solid transparent; border-radius: 8px;
+      background-clip: padding-box; transition: background 0.3s ease;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.34); background-clip: padding-box; }
+    html.scrolling::-webkit-scrollbar-thumb,
+    html.scrolling *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.20); background-clip: padding-box; }
     body {
       font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
       font-size: ${baseFontSize};
@@ -446,6 +453,17 @@ function renderHTML(items, options = {}) {
   </footer>
   <script>
     const DIGEST_BROWSER = '${digestBrowser}';
+
+    // Auto-hide scrollbars: reveal while scrolling, hide ~0.8s after idle.
+    (function () {
+      let idle;
+      const root = document.documentElement;
+      window.addEventListener('scroll', function () {
+        root.classList.add('scrolling');
+        clearTimeout(idle);
+        idle = setTimeout(function () { root.classList.remove('scrolling'); }, 800);
+      }, true);
+    })();
 
     // ── Search + filter state ─────────────────────────────────────────────────
     let activeFilterType = 'all';
