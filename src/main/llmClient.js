@@ -9,6 +9,11 @@ const PROVIDERS = {
     baseURL: 'https://api.x.ai/v1',
     models: ['grok-3', 'grok-3-fast', 'grok-3-mini']
   },
+  groq: {
+    label: 'Groq',
+    baseURL: 'https://api.groq.com/openai/v1',
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b']
+  },
   openai: {
     label: 'OpenAI',
     baseURL: 'https://api.openai.com/v1',
@@ -82,6 +87,7 @@ function friendlyError(err, provider) {
   const keyHint = provider === 'gemini' ? ' Get one at aistudio.google.com/apikey.'
     : provider === 'openai' ? ' Get one at platform.openai.com/api-keys.'
     : provider === 'anthropic' ? ' Get one at console.anthropic.com.'
+    : provider === 'groq' ? ' Get one at console.groq.com/keys.'
     : '';
 
   if (status === 401 || status === 403) {

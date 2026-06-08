@@ -362,6 +362,7 @@ const MODEL_MAP = {
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini'],
   gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
   xai: ['grok-3', 'grok-3-fast', 'grok-3-mini'],
+  groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'],
   ollama: ['llama3.2', 'llama3.1', 'mistral', 'phi3', 'gemma2'],
   custom: []
 };
