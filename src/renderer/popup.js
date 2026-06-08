@@ -7,10 +7,19 @@ const SOURCE_COLORS = {
   reddit: '#ff4500',
   newsletter: '#0078d4', blog: '#2ecc71', webpage: '#16a085', 'web-capture': '#8e44ad'
 };
-const SOURCE_ICONS = {
-  rss:'📡', podcast:'🎙️', youtube:'▶️',
-  reddit:'🔴', newsletter:'📧', blog:'✍️', webpage:'🌐', 'web-capture':'🧩'
-};
+// Source-type glyphs come from the shared SF-style icon set (icons.js).
+const srcIcon = (type) => window.PKIcons.icon(type);
+
+// Auto-hide scrollbars: reveal while scrolling, hide ~0.8s after idle.
+(function setupAutoHideScrollbars() {
+  let idle;
+  const root = document.documentElement;
+  window.addEventListener('scroll', () => {
+    root.classList.add('scrolling');
+    clearTimeout(idle);
+    idle = setTimeout(() => root.classList.remove('scrolling'), 800);
+  }, true);
+})();
 
 let allItems = [];
 let readIds = new Set();
@@ -87,8 +96,8 @@ function renderFilters() {
     const typeItems = allItems.filter(i => i.sourceType === type);
     const unread = typeItems.filter(i => !readIds.has(i.id)).length;
     const label = unread > 0
-      ? `${SOURCE_ICONS[type] || '📄'} ${type} <span class="chip-unread">${unread}</span>`
-      : `${SOURCE_ICONS[type] || '📄'} ${type} (${typeItems.length})`;
+      ? `${srcIcon(type)} ${type} <span class="chip-unread">${unread}</span>`
+      : `${srcIcon(type)} ${type} (${typeItems.length})`;
     row.appendChild(makeChip(type, label, activeFilter === type));
   }
 
@@ -132,7 +141,7 @@ function renderItems() {
   document.getElementById('itemCount').textContent = `${filtered.length} items`;
 
   if (!filtered.length) {
-    list.innerHTML = '<div class="empty">No content yet<br><small>Click 🔄 to fetch your sources</small></div>';
+    list.innerHTML = `<div class="empty">No content yet<br><small>Click ${srcIcon('refresh')} to fetch your sources</small></div>`;
     return;
   }
 
@@ -153,7 +162,7 @@ function renderItems() {
 
 function renderItem(item, i) {
   const color = SOURCE_COLORS[item.sourceType] || '#666';
-  const icon = SOURCE_ICONS[item.sourceType] || '📄';
+  const icon = srcIcon(item.sourceType);
   const dateStr = relativeTime(item.publishedAt);
   const isRead = readIds.has(item.id);
   const thumb = item.thumbnail

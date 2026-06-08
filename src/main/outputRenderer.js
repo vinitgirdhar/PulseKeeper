@@ -4,17 +4,45 @@ const fs = require('fs');
 const path = require('path');
 const { marked } = require('marked');
 
-// Source type icons (inline SVG paths for use in HTML)
-const SOURCE_ICONS = {
-  rss: '📡',
-  podcast: '🎙️',
-  youtube: '▶️',
-  reddit: '🔴',
-  newsletter: '📧',
-  blog: '✍️',
-  webpage: '🌐',
-  'web-capture': '🧩'
+// SF-Symbols-style inline-SVG icons for the generated digest page.
+// (Mirrors src/renderer/icons.js — kept standalone because the digest HTML is a
+//  self-contained file:// document that can't load the renderer's icon script.)
+const ICON_PATHS = {
+  rss:       '<circle cx="6.5" cy="17.5" r="1.7" fill="currentColor" stroke="none"/><path d="M5 11.5a7.5 7.5 0 0 1 7.5 7.5M5 6a13 13 0 0 1 13 13"/>',
+  podcast:   '<rect x="9" y="3.5" width="6" height="10" rx="3"/><path d="M6.5 11a5.5 5.5 0 0 0 11 0M12 16.5V20M9.5 20h5"/>',
+  youtube:   '<rect x="3.5" y="6" width="17" height="12" rx="3.5"/><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor" stroke="none"/>',
+  reddit:    '<circle cx="12" cy="13" r="7"/><circle cx="9" cy="12.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="12.5" r="1" fill="currentColor" stroke="none"/><path d="M9.2 15.5a4 4 0 0 0 5.6 0M16.5 8.5l-1-3.5-3.2.8"/><circle cx="18.5" cy="9" r="1.3"/>',
+  mail:      '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>',
+  blog:      '<path d="M16.5 4.5l3 3L9 18l-4 1 1-4z"/><path d="M13.5 7.5l3 3"/>',
+  globe:     '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.3 3.8 8.5S14.5 18.2 12 20.5C9.5 18.2 8.2 15.2 8.2 12S9.5 5.8 12 3.5z"/>',
+  capture:   '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 9.5h16M8 4v5.5"/>',
+  doc:       '<path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1-1.5z"/><path d="M14 3.5V8h4"/>',
+  newspaper: '<path d="M4 6h12.5a1 1 0 0 1 1 1v10.5A1.5 1.5 0 0 1 16 19H6a2 2 0 0 1-2-2z"/><path d="M17.5 9H19a1 1 0 0 1 1 1v7a1.5 1.5 0 0 1-1.5 1.5M7 9.5h6.5M7 12.5h6.5M7 15.5h4"/>',
+  ai:        '<path d="M12 3.5l1.6 4.2 4.2 1.6-4.2 1.6L12 15.1l-1.6-4.2L6.2 9.3l4.2-1.6z"/><path d="M18 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  search:    '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>',
+  refresh:   '<path d="M19 9a7 7 0 1 0 .8 5"/><path d="M19.5 4.5V9H15"/>',
+  close:     '<path d="M6 6l12 12M18 6 6 18"/>',
+  back:      '<path d="M15 5l-7 7 7 7"/>',
+  forward:   '<path d="M9 5l7 7-7 7"/>',
+  home:      '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9.5h12V10"/><path d="M10 19.5v-5h4v5"/>',
+  external:  '<path d="M14 4h6v6M20 4l-8 8"/><path d="M18 13v5.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H11"/>',
 };
+
+const TYPE_ICON = {
+  rss: 'rss', podcast: 'podcast', youtube: 'youtube', reddit: 'reddit',
+  newsletter: 'mail', blog: 'blog', webpage: 'globe', 'web-capture': 'capture'
+};
+
+function icon(name, size) {
+  const inner = ICON_PATHS[name] || ICON_PATHS.doc;
+  const dim = size ? `width="${size}" height="${size}"` : 'width="1em" height="1em"';
+  return `<svg class="pk-i" ${dim} viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
+         `stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+
+function typeIcon(type, size) {
+  return icon(TYPE_ICON[type] || 'doc', size);
+}
 
 const SOURCE_COLORS = {
   rss: '#f26522',
@@ -66,7 +94,7 @@ function renderHTML(items, options = {}) {
     const badgeLabel = unread > 0 ? `${unread} unread` : `${typeItems.length}`;
     return `
     <div class="sidebar-group">
-      <div class="sidebar-label">${SOURCE_ICONS[type] || '📄'} ${type.toUpperCase()} <span class="${badgeClass}">${badgeLabel}</span></div>
+      <div class="sidebar-label"><span style="display:flex;align-items:center;gap:7px">${typeIcon(type)} ${type.toUpperCase()}</span> <span class="${badgeClass}">${badgeLabel}</span></div>
     </div>`;
   }).join('');
 
@@ -76,7 +104,7 @@ function renderHTML(items, options = {}) {
 
   const aiSection = aiDigest ? `
     <section class="ai-digest">
-      <h2>🤖 AI Digest</h2>
+      <h2>${icon('ai')} AI Digest</h2>
       <div class="ai-content">${marked.parse(aiDigest)}</div>
     </section>` : '';
 
@@ -109,6 +137,16 @@ function renderHTML(items, options = {}) {
       --nav-h: 0px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Thin auto-hide scrollbars — invisible when idle, fade in while scrolling/hovering */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: transparent; border: 2px solid transparent; border-radius: 8px;
+      background-clip: padding-box; transition: background 0.3s ease;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.34); background-clip: padding-box; }
+    html.scrolling::-webkit-scrollbar-thumb,
+    html.scrolling *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.20); background-clip: padding-box; }
     body {
       font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
       font-size: ${baseFontSize};
@@ -117,6 +155,9 @@ function renderHTML(items, options = {}) {
       line-height: 1.6;
       min-height: 100vh;
     }
+    /* Inline SVG icons inherit text color + size */
+    .pk-i { vertical-align: -0.14em; flex-shrink: 0; }
+    .source-badge .pk-i, .filter-btn .pk-i, .sidebar-label .pk-i, .stat .pk-i { vertical-align: -0.16em; }
     /* ── Navigation toolbar (shown via JS when digestNav is available) ── */
     .nav-toolbar {
       display: none;
@@ -135,12 +176,15 @@ function renderHTML(items, options = {}) {
       border: 1px solid rgba(255,255,255,0.1);
       color: var(--text2);
       border-radius: 5px;
-      padding: 3px 9px;
+      padding: 4px 9px;
       cursor: pointer;
       font-size: 14px;
       line-height: 1;
       transition: all 0.15s;
       flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .nav-btn:disabled { opacity: 0.3; cursor: default; }
     .nav-btn:not(:disabled):hover { background: rgba(255,255,255,0.14); color: var(--text); }
@@ -171,6 +215,9 @@ function renderHTML(items, options = {}) {
       transition: all 0.15s;
       flex-shrink: 0;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
     }
     .nav-btn-close:hover { background: rgba(0,120,212,0.3); border-color: var(--accent2); color: white; }
     .header {
@@ -188,7 +235,7 @@ function renderHTML(items, options = {}) {
     .header-title { font-size: 22px; font-weight: 600; color: var(--accent2); }
     .header-meta { color: var(--text2); font-size: 13px; }
     .header-stats { display: flex; gap: 16px; }
-    .stat { background: var(--card-bg); padding: 6px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); }
+    .stat { background: var(--card-bg); padding: 6px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 6px; }
     .layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 80px - var(--nav-h)); }
     .sidebar {
       background: var(--surface);
@@ -205,7 +252,7 @@ function renderHTML(items, options = {}) {
     .badge { border-radius: 10px; padding: 1px 7px; font-size: 10px; }
     .badge-unread { background: var(--accent); color: white; }
     .badge-read   { background: rgba(255,255,255,0.1); color: var(--text2); }
-    .main { padding: 24px 32px; max-width: 960px; }
+    .main { padding: 24px 32px; max-width: 1040px; margin: 0 auto; width: 100%; min-width: 0; }
     .ai-digest {
       background: linear-gradient(135deg, rgba(0,120,212,0.15), rgba(96,205,255,0.08));
       border: 1px solid rgba(0,120,212,0.3);
@@ -299,6 +346,9 @@ function renderHTML(items, options = {}) {
       border-radius: 10px;
       font-weight: 500;
       color: white;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
     }
     .item-date { font-size: 11px; color: var(--text2); }
     .item-author { font-size: 11px; color: var(--text2); }
@@ -321,7 +371,7 @@ function renderHTML(items, options = {}) {
     .search-input:focus { border-color: var(--accent); }
     .search-input::placeholder { color: var(--text2); }
     .search-wrap { position: relative; }
-    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; pointer-events: none; }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; color: var(--text2); pointer-events: none; }
     .no-results { text-align: center; color: var(--text2); padding: 40px 0; font-size: 13px; }
     .filter-bar {
       display: flex;
@@ -338,6 +388,9 @@ function renderHTML(items, options = {}) {
       cursor: pointer;
       font-size: 12px;
       transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
     .filter-btn.active, .filter-btn:hover {
       background: var(--accent);
@@ -368,25 +421,25 @@ function renderHTML(items, options = {}) {
 <body>
   <!-- Navigation toolbar — shown via JS when running inside the in-app viewer -->
   <div class="nav-toolbar" id="navToolbar">
-    <button class="nav-btn" id="navBtnBack"    title="Back"                  disabled>&#8592;</button>
-    <button class="nav-btn" id="navBtnForward" title="Forward"               disabled>&#8594;</button>
-    <button class="nav-btn" id="navBtnReload"  title="Reload">&#8635;</button>
-    <button class="nav-btn" id="navBtnHome"    title="Return to digest">&#127968;</button>
+    <button class="nav-btn" id="navBtnBack"    title="Back"    aria-label="Back"    disabled>${icon('back', 15)}</button>
+    <button class="nav-btn" id="navBtnForward" title="Forward" aria-label="Forward" disabled>${icon('forward', 15)}</button>
+    <button class="nav-btn" id="navBtnReload"  title="Reload"  aria-label="Reload">${icon('refresh', 15)}</button>
+    <button class="nav-btn" id="navBtnHome"    title="Return to digest" aria-label="Home">${icon('home', 15)}</button>
     <div class="nav-sep"></div>
     <div class="nav-url" id="navUrlBar">PulseKeeper Digest</div>
     <div class="nav-sep"></div>
-    <button class="nav-btn" id="navBtnExternal" title="Open current page in system browser">&#8599;</button>
+    <button class="nav-btn" id="navBtnExternal" title="Open current page in system browser" aria-label="Open in browser">${icon('external', 15)}</button>
     <div class="nav-sep"></div>
-    <button class="nav-btn-close" id="navBtnClose" title="Return to digest">&#10005; Digest</button>
+    <button class="nav-btn-close" id="navBtnClose" title="Return to digest">${icon('close', 14)} Digest</button>
   </div>
   <header class="header">
     <div>
-      <div class="header-title">📰 ${escapeHTML(title)}</div>
+      <div class="header-title" style="display:flex;align-items:center;gap:10px">${icon('newspaper')} ${escapeHTML(title)}</div>
       <div class="header-meta">${dateStr} at ${timeStr}${totalUnread > 0 ? ` · <strong style="color:var(--accent2)">${totalUnread} unread</strong>` : ''}${newSinceCount > 0 ? ` · <strong style="color:#6ccb5f">${newSinceCount} new since last digest</strong>` : ''}</div>
     </div>
     <div class="header-stats">
       ${Object.entries(byType).map(([type, typeItems]) =>
-        `<div class="stat">${SOURCE_ICONS[type] || '📄'} ${typeItems.length} ${type}</div>`
+        `<div class="stat">${typeIcon(type)} ${typeItems.length} ${type}</div>`
       ).join('')}
     </div>
   </header>
@@ -400,14 +453,14 @@ function renderHTML(items, options = {}) {
       ${aiSection}
       <div class="search-bar">
         <div class="search-wrap">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon">${icon('search', 15)}</span>
           <input class="search-input" id="searchInput" type="search" placeholder="Search titles and descriptions…" autocomplete="off">
         </div>
       </div>
       <div class="filter-bar" id="filterBar">
         <button class="filter-btn active" data-filter="all">All (${items.length})</button>
         ${Object.entries(byType).map(([type, typeItems]) =>
-          `<button class="filter-btn" data-filter="${escapeHTML(type)}">${SOURCE_ICONS[type] || '📄'} ${type} (${typeItems.length})</button>`
+          `<button class="filter-btn" data-filter="${escapeHTML(type)}">${typeIcon(type)} ${type} (${typeItems.length})</button>`
         ).join('')}
       </div>
       <div class="items-grid" id="itemsGrid">
@@ -420,6 +473,17 @@ function renderHTML(items, options = {}) {
   </footer>
   <script>
     const DIGEST_BROWSER = '${digestBrowser}';
+
+    // Auto-hide scrollbars: reveal while scrolling, hide ~0.8s after idle.
+    (function () {
+      let idle;
+      const root = document.documentElement;
+      window.addEventListener('scroll', function () {
+        root.classList.add('scrolling');
+        clearTimeout(idle);
+        idle = setTimeout(function () { root.classList.remove('scrolling'); }, 800);
+      }, true);
+    })();
 
     // ── Search + filter state ─────────────────────────────────────────────────
     let activeFilterType = 'all';
@@ -516,13 +580,13 @@ function renderHTML(items, options = {}) {
 
 function renderItemHTML(item, readIdsSet = new Set(), prevIds = new Set()) {
   const color = SOURCE_COLORS[item.sourceType] || '#666';
-  const icon = SOURCE_ICONS[item.sourceType] || '📄';
+  const tIcon = typeIcon(item.sourceType);
   const dateStr = formatDate(item.publishedAt);
   const isRead = readIdsSet.has(item.id);
   const isNew = prevIds.size > 0 && !prevIds.has(item.id);
   const thumb = item.thumbnail
     ? `<img class="item-thumb" src="${escapeHTML(item.thumbnail)}" alt="" loading="lazy" onerror="this.style.display='none'">`
-    : `<div class="item-thumb-placeholder">${icon}</div>`;
+    : `<div class="item-thumb-placeholder">${tIcon}</div>`;
 
   return `<a class="item-card${isRead ? ' is-read' : ''}" href="${escapeHTML(item.url)}" target="_blank" rel="noopener" data-type="${escapeHTML(item.sourceType || 'rss')}" data-id="${escapeHTML(item.id || '')}" data-title="${escapeHTML((item.title || '').toLowerCase())}" data-desc="${escapeHTML((item.description || '').toLowerCase())}">
     ${thumb}
@@ -530,7 +594,7 @@ function renderItemHTML(item, readIdsSet = new Set(), prevIds = new Set()) {
       <div class="item-title">${escapeHTML(item.title)}${isNew ? '<span class="new-badge">New</span>' : ''}</div>
       <div class="item-desc">${escapeHTML(item.description || '')}</div>
       <div class="item-meta">
-        <span class="source-badge" style="background:${color}">${icon} ${escapeHTML(item.sourceName)}</span>
+        <span class="source-badge" style="background:${color}">${tIcon} ${escapeHTML(item.sourceName)}</span>
         ${item.author ? `<span class="item-author">${escapeHTML(item.author)}</span>` : ''}
         <span class="item-date">${dateStr}</span>
       </div>
@@ -557,11 +621,11 @@ function renderMarkdown(items, options = {}) {
   md += `---\n\n`;
 
   if (aiDigest) {
-    md += `## 🤖 AI Digest\n\n${aiDigest}\n\n---\n\n`;
+    md += `## AI Digest\n\n${aiDigest}\n\n---\n\n`;
   }
 
   for (const [type, typeItems] of Object.entries(byType)) {
-    md += `## ${SOURCE_ICONS[type] || '📄'} ${type.charAt(0).toUpperCase() + type.slice(1)}\n\n`;
+    md += `## ${type.charAt(0).toUpperCase() + type.slice(1)}\n\n`;
     for (const item of typeItems) {
       md += `### [${item.title}](${item.url})\n`;
       md += `**Source:** ${item.sourceName}`;
@@ -599,4 +663,4 @@ function escapeHTML(str) {
     .replace(/"/g, '&quot;');
 }
 
-module.exports = { renderHTML, renderMarkdown, SOURCE_ICONS, SOURCE_COLORS };
+module.exports = { renderHTML, renderMarkdown, SOURCE_COLORS };

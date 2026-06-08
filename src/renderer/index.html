@@ -24,7 +24,7 @@
     </div>
     <div class="sidebar-nav">
       <div class="nav-item active" data-tab="sources">
-        <span class="nav-icon">📡</span>
+        <span class="nav-icon" data-icon="sources"></span>
         <span>Sources</span>
         <span class="nav-badge" id="sourceBadge">0</span>
       </div>
@@ -34,31 +34,31 @@
         <span class="nav-badge" id="feedBadge">0</span>
       </div>
       <div class="nav-item" data-tab="settings">
-        <span class="nav-icon">⚙️</span>
+        <span class="nav-icon" data-icon="settings"></span>
         <span>Settings</span>
       </div>
       <div class="nav-item" data-tab="llm">
-        <span class="nav-icon">🤖</span>
+        <span class="nav-icon" data-icon="ai"></span>
         <span>AI / LLM</span>
       </div>
       <div class="nav-item" data-tab="health">
-        <span class="nav-icon">📊</span>
+        <span class="nav-icon" data-icon="health"></span>
         <span>Health</span>
       </div>
       <div class="nav-item" data-tab="export">
-        <span class="nav-icon">📤</span>
+        <span class="nav-icon" data-icon="export"></span>
         <span>Export</span>
       </div>
       <div class="nav-item" data-tab="extension">
-        <span class="nav-icon">🧩</span>
+        <span class="nav-icon" data-icon="puzzle"></span>
         <span>Extension</span>
       </div>
       <div class="nav-item" data-tab="about">
-        <span class="nav-icon">ℹ️</span>
+        <span class="nav-icon" data-icon="info"></span>
         <span>About</span>
       </div>
     </div>
-    <button class="theme-toggle-btn" id="btnThemeToggle" title="Toggle light/dark theme">🌙 Dark Mode</button>
+    <button class="theme-toggle-btn" id="btnThemeToggle" title="Toggle light/dark theme"><span data-icon="moon"></span> <span class="theme-label">Dark Mode</span></button>
     <div class="sidebar-footer" id="statusBar">Ready</div>
   </nav>
 
@@ -73,17 +73,17 @@
           <div class="page-subtitle">Manage your feeds, channels, and monitored pages</div>
         </div>
         <div class="page-actions">
-          <button class="btn btn-secondary" id="btnImportOPML">📥 Import OPML</button>
-          <button class="btn btn-secondary" id="btnRefreshAll">🔄 Refresh All</button>
-          <button class="btn btn-primary" id="btnAddSource">+ Add Source</button>
+          <button class="btn btn-secondary" id="btnImportOPML"><span data-icon="import"></span> Import OPML</button>
+          <button class="btn btn-secondary" id="btnRefreshAll"><span data-icon="refresh"></span> Refresh All</button>
+          <button class="btn btn-primary" id="btnAddSource"><span data-icon="plus"></span> Add Source</button>
         </div>
       </div>
       <div id="sourceList" class="source-list">
         <div class="empty-state">
-          <div class="empty-icon">📡</div>
+          <div class="empty-icon" data-icon="sources" data-size="44"></div>
           <h3>No sources yet</h3>
           <p>Add your first content source to get started</p>
-          <button class="btn btn-primary" onclick="openAddSource()">+ Add Source</button>
+          <button class="btn btn-primary" onclick="openAddSource()"><span data-icon="plus"></span> Add Source</button>
         </div>
       </div>
     </div>
@@ -122,7 +122,7 @@
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:20px;">
         <div class="card">
-          <div class="card-header"><h3>🔄 Collection</h3></div>
+          <div class="card-header"><h3><span data-icon="refresh"></span> Collection</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
             <div class="form-group">
               <label class="form-label">Refresh Interval</label>
@@ -162,7 +162,7 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>📄 Output Format</h3></div>
+          <div class="card-header"><h3><span data-icon="document"></span> Output Format</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
             <div class="form-group">
               <label class="form-label">Default Digest Format</label>
@@ -192,7 +192,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <h3>⏰ Auto Digest</h3>
+            <h3><span data-icon="alarm"></span> Auto Digest</h3>
             <label class="toggle"><input type="checkbox" id="settingAutoDigestEnabled"><span class="toggle-slider"></span></label>
           </div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
@@ -204,7 +204,7 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>🔔 Notifications</h3></div>
+          <div class="card-header"><h3><span data-icon="bell"></span> Notifications</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
             <div style="display:flex;align-items:center;justify-content:space-between">
               <div><div style="font-size:13px;font-weight:500">Windows notifications</div><div class="form-hint">Toast notifications on refresh</div></div>
@@ -217,17 +217,17 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>🔇 Mute Words</h3></div>
+          <div class="card-header"><h3><span data-icon="mute"></span> Mute Words</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
             <p style="font-size:12px">Items whose title or description contains any of these words will be hidden. Separate with commas.</p>
             <textarea class="textarea mute-textarea" id="settingMuteWords" placeholder="sponsored, advertisement, clickbait…"></textarea>
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>💾 Backup &amp; Restore</h3></div>
+          <div class="card-header"><h3><span data-icon="save"></span> Backup &amp; Restore</h3></div>
           <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary" id="btnExportBackup">⬆️ Export Backup</button>
-            <button class="btn btn-secondary" id="btnImportBackup">⬇️ Import Backup</button>
+            <button class="btn btn-secondary" id="btnExportBackup"><span data-icon="upload"></span> Export Backup</button>
+            <button class="btn btn-secondary" id="btnImportBackup"><span data-icon="download"></span> Import Backup</button>
           </div>
         </div>
       </div>
@@ -248,7 +248,7 @@
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:20px;">
         <div class="card">
           <div class="card-header">
-            <h3>🤖 LLM Configuration</h3>
+            <h3><span data-icon="ai"></span> LLM Configuration</h3>
             <label class="toggle"><input type="checkbox" id="llmEnabled"><span class="toggle-slider"></span></label>
           </div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
@@ -299,7 +299,7 @@
           <div class="page-subtitle">Fetch metrics and error status for each source</div>
         </div>
         <div class="page-actions">
-          <button class="btn btn-secondary" id="btnRefreshHealth">🔄 Refresh</button>
+          <button class="btn btn-secondary" id="btnRefreshHealth"><span data-icon="refresh"></span> Refresh</button>
         </div>
       </div>
       <div style="padding:20px">
@@ -314,25 +314,25 @@
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px;">
         <div class="card">
-          <div class="card-header"><h3>📄 Generate Digest</h3></div>
+          <div class="card-header"><h3><span data-icon="document"></span> Generate Digest</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn btn-primary" onclick="window.pcbAPI.output.openDigest()">🌐 Open HTML Digest</button>
-            <button class="btn btn-secondary" onclick="window.pcbAPI.output.exportMarkdown()">📝 Export as Markdown</button>
-            <button class="btn btn-secondary" onclick="window.pcbAPI.output.exportPDF()">📄 Export as PDF</button>
+            <button class="btn btn-primary" onclick="window.pcbAPI.output.openDigest()"><span data-icon="globe"></span> Open HTML Digest</button>
+            <button class="btn btn-secondary" onclick="window.pcbAPI.output.exportMarkdown()"><span data-icon="document"></span> Export as Markdown</button>
+            <button class="btn btn-secondary" onclick="window.pcbAPI.output.exportPDF()"><span data-icon="file"></span> Export as PDF</button>
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>🤖 AgentPlatform Integration</h3></div>
+          <div class="card-header"><h3><span data-icon="robot"></span> AgentPlatform Integration</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
             <p style="font-size:13px;line-height:1.7">Export as an <a href="#" onclick="window.pcbAPI.ui.openExternal('https://github.com/rod-trent/AgentPlatform')">AgentPlatform</a> agent pack. Creates a chained Script Agent (collects content) + Prompt Agent (AI digest).</p>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-primary" onclick="exportAgentPack(false)">📤 Export Full Pack</button>
+              <button class="btn btn-primary" onclick="exportAgentPack(false)"><span data-icon="export"></span> Export Full Pack</button>
               <button class="btn btn-secondary" onclick="exportAgentPack(true)">Script Agent Only</button>
             </div>
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>📂 Data Folders</h3></div>
+          <div class="card-header"><h3><span data-icon="folder"></span> Data Folders</h3></div>
           <div class="card-body" style="display:flex;gap:8px">
             <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openDataDir()">Open Data Folder</button>
             <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openOutputDir()">Open Output Folder</button>
@@ -340,7 +340,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <h3>🕒 Digest History</h3>
+            <h3><span data-icon="clock"></span> Digest History</h3>
           </div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
             <div class="form-group">
@@ -371,7 +371,7 @@
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px;">
         <div class="card">
-          <div class="card-header"><h3>🧩 Install the Extension</h3></div>
+          <div class="card-header"><h3><span data-icon="puzzle"></span> Install the Extension</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
             <ol style="font-size:13px;line-height:2;padding-left:20px;color:var(--text-secondary)">
               <li>Open <strong style="color:var(--text)">chrome://extensions</strong> (Chrome) or <strong style="color:var(--text)">edge://extensions</strong> (Edge)</li>
@@ -383,7 +383,7 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>⚡ How to Use</h3></div>
+          <div class="card-header"><h3><span data-icon="bolt"></span> How to Use</h3></div>
           <div class="card-body">
             <ul style="font-size:13px;line-height:2;padding-left:20px;color:var(--text-secondary)">
               <li><strong style="color:var(--text)">Right-click any page</strong> → "Send page to PulseKeeper"</li>
@@ -395,7 +395,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <h3>🔌 Capture Server Status</h3>
+            <h3><span data-icon="plug"></span> Capture Server Status</h3>
             <div id="serverStatus" style="font-size:11px;color:var(--text-secondary)">Checking…</div>
           </div>
           <div class="card-body">
@@ -432,14 +432,14 @@
           <div class="card-header"><h3>Supported Sources</h3></div>
           <div class="card-body">
             <div class="tag-grid">
-              <span class="tag type-rss">📡 RSS / Atom</span>
-              <span class="tag type-podcast">🎙️ Podcasts</span>
-              <span class="tag type-youtube">▶️ YouTube</span>
-              <span class="tag type-reddit">🔴 Reddit</span>
-              <span class="tag type-newsletter">📧 Newsletters</span>
-              <span class="tag type-blog">✍️ Blogs</span>
-              <span class="tag" style="border-color:#0078d4;color:#60cdff">🌐 Web Pages</span>
-              <span class="tag" style="border-color:#107c10;color:#6ccb5f">🧩 Browser Ext</span>
+              <span class="tag type-rss"><span data-icon="rss"></span> RSS / Atom</span>
+              <span class="tag type-podcast"><span data-icon="podcast"></span> Podcasts</span>
+              <span class="tag type-youtube"><span data-icon="youtube"></span> YouTube</span>
+              <span class="tag type-reddit"><span data-icon="reddit"></span> Reddit</span>
+              <span class="tag type-newsletter"><span data-icon="mail"></span> Newsletters</span>
+              <span class="tag type-blog"><span data-icon="blog"></span> Blogs</span>
+              <span class="tag" style="border-color:#0078d4;color:#60cdff"><span data-icon="globe"></span> Web Pages</span>
+              <span class="tag" style="border-color:#107c10;color:#6ccb5f"><span data-icon="puzzle"></span> Browser Ext</span>
             </div>
           </div>
         </div>
@@ -454,7 +454,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modalTitle">Add Source</div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close" data-icon="close"></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
@@ -495,6 +495,7 @@
   </div>
 </div>
 
+<script src="icons.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -139,14 +139,14 @@ function createTray() {
 
 function buildContextMenu() {
   return Menu.buildFromTemplate([
-    { label: '💓 PulseKeeper', enabled: false },
+    { label: 'PulseKeeper', enabled: false },
     { type: 'separator' },
-    { label: '📰 View Digest', click: () => openDigest() },
-    { label: '🔄 Refresh Now', click: () => { if (!isCollecting) collector.collectAll(); }, enabled: !isCollecting },
+    { label: 'View Digest', click: () => openDigest() },
+    { label: 'Refresh Now', click: () => { if (!isCollecting) collector.collectAll(); }, enabled: !isCollecting },
     { type: 'separator' },
-    { label: '⚙️  Settings', click: () => openSettings() },
-    { label: '📤 Export to AgentPlatform', click: () => exportToAgentPlatform() },
-    { label: '📂 Open Data Folder', click: () => shell.openPath(storage.getDataDir()) },
+    { label: 'Settings', click: () => openSettings() },
+    { label: 'Export to AgentPlatform', click: () => exportToAgentPlatform() },
+    { label: 'Open Data Folder', click: () => shell.openPath(storage.getDataDir()) },
     { type: 'separator' },
     { label: 'Quit PulseKeeper', click: () => app.exit(0) }
   ]);
@@ -354,17 +354,27 @@ async function openDigest() {
 
   const btnStyle = [
     'background:rgba(255,255,255,0.06)','border:1px solid rgba(255,255,255,0.1)',
-    'color:#ababab','border-radius:5px','padding:3px 9px','cursor:pointer',
+    'color:#ababab','border-radius:5px','padding:4px 9px','cursor:pointer',
     'font-size:14px','line-height:1','transition:all 0.15s','flex-shrink:0',
-    'font-family:inherit'
+    'font-family:inherit','display:inline-flex','align-items:center','justify-content:center'
   ].join(';');
 
   const closeStyle = [
     'background:rgba(0,120,212,0.15)','border:1px solid rgba(0,120,212,0.35)',
     'color:#60cdff','border-radius:5px','padding:3px 11px','cursor:pointer',
     'font-size:12px','line-height:1.4','transition:all 0.15s','flex-shrink:0',
-    'white-space:nowrap','font-family:inherit'
+    'white-space:nowrap','font-family:inherit','display:inline-flex','align-items:center','gap:5px'
   ].join(';');
+
+  // SF-style inline-SVG icons (matches the digest page + settings window).
+  const svg = (inner) => '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block">' + inner + '</svg>';
+  const ICN = {
+    back:    '<path d="M15 5l-7 7 7 7"/>',
+    forward: '<path d="M9 5l7 7-7 7"/>',
+    reload:  '<path d="M19 9a7 7 0 1 0 .8 5"/><path d="M19.5 4.5V9H15"/>',
+    external:'<path d="M14 4h6v6M20 4l-8 8"/><path d="M18 13v5.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H11"/>',
+    close:   '<path d="M6 6l12 12M18 6 6 18"/>'
+  };
 
   const mk = (tag, style, html, title) => {
     const el = document.createElement(tag);
@@ -374,9 +384,9 @@ async function openDigest() {
     return el;
   };
 
-  const btnBack     = mk('button', btnStyle, '&#8592;', 'Back');
-  const btnForward  = mk('button', btnStyle, '&#8594;', 'Forward');
-  const btnReload   = mk('button', btnStyle, '&#8635;', 'Reload');
+  const btnBack     = mk('button', btnStyle, svg(ICN.back), 'Back');
+  const btnForward  = mk('button', btnStyle, svg(ICN.forward), 'Forward');
+  const btnReload   = mk('button', btnStyle, svg(ICN.reload), 'Reload');
   const sep1        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
   const urlBar      = mk('div',
     'flex:1;min-width:0;font-size:11px;color:#ababab;overflow:hidden;text-overflow:ellipsis;' +
@@ -384,9 +394,9 @@ async function openDigest() {
     'border-radius:5px;padding:3px 10px');
   urlBar.textContent = location.href;
   const sep2        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
-  const btnExternal = mk('button', btnStyle, '&#8599;', 'Open in system browser');
+  const btnExternal = mk('button', btnStyle, svg(ICN.external), 'Open in system browser');
   const sep3        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
-  const btnClose    = mk('button', closeStyle, '&#10005; Digest', 'Return to digest');
+  const btnClose    = mk('button', closeStyle, svg(ICN.close) + ' Digest', 'Return to digest');
 
   [btnBack, btnForward, btnReload, sep1, urlBar, sep2, btnExternal, sep3, btnClose]
     .forEach(el => bar.appendChild(el));
