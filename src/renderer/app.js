@@ -19,6 +19,7 @@ const icon = (name, size) => window.PKIcons.icon(name, size);
 let sourceTypes = [];
 let sources = [];
 let editingSourceId = null;
+let llmKeys = {};
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
@@ -47,6 +48,10 @@ async function init() {
     document.body.classList.toggle('theme-light', theme === 'light');
     updateThemeButton(theme);
   });
+  // AI digest generation progress (scheduled, on-open, or manual).
+  api.on.digestGenerating(d => setDigestGenerating(d.model, d.startedAt));
+  api.on.digestGenerated(() => { refreshDigestStatus(); showToast('AI digest ready'); });
+  api.on.digestError(d => { refreshDigestStatus(); showToast(`AI digest failed: ${d.message}`, 'error'); });
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
@@ -320,10 +325,20 @@ async function loadSettings() {
   document.getElementById('settingDigestBrowser').value = s.digestBrowser || 'internal';
   document.getElementById('settingDigestFontSize').value = s.display?.digestFontSize || 'medium';
   document.getElementById('settingAutoDigestEnabled').checked = !!s.autoDigest?.enabled;
+  document.getElementById('settingAutoDigestMode').value = s.autoDigest?.mode || 'interval';
+  document.getElementById('settingAutoDigestHours').value = s.autoDigest?.everyHours || 8;
   document.getElementById('settingAutoDigestTime').value = s.autoDigest?.time || '08:00';
+  updateAutoDigestModeVisibility();
   document.getElementById('settingNotifyEnabled').checked = s.notifications?.enabled !== false;
   document.getElementById('settingNotifyOnRefresh').checked = !!s.notifications?.onRefresh;
   document.getElementById('settingMuteWords').value = (s.muteWords || []).join(', ');
+}
+
+// Show the hours field for interval mode, the time field for daily mode.
+function updateAutoDigestModeVisibility() {
+  const mode = document.getElementById('settingAutoDigestMode').value;
+  document.getElementById('autoDigestIntervalGroup').style.display = mode === 'interval' ? 'block' : 'none';
+  document.getElementById('autoDigestTimeGroup').style.display = mode === 'daily' ? 'block' : 'none';
 }
 
 async function saveSettings() {
@@ -346,6 +361,8 @@ async function saveSettings() {
     muteWords,
     autoDigest: {
       enabled: document.getElementById('settingAutoDigestEnabled').checked,
+      mode: document.getElementById('settingAutoDigestMode').value || 'interval',
+      everyHours: Math.min(24, Math.max(1, parseInt(document.getElementById('settingAutoDigestHours').value, 10) || 8)),
       time: document.getElementById('settingAutoDigestTime').value || '08:00'
     },
     notifications: {
@@ -359,7 +376,7 @@ async function saveSettings() {
 // ─── LLM ──────────────────────────────────────────────────────────────────────
 const MODEL_MAP = {
   anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini'],
+  openai: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3-mini'],
   gemini: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
   xai: ['grok-3', 'grok-3-fast', 'grok-3-mini'],
   groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'gemma2-9b-it', 'deepseek-r1-distill-llama-70b'],
@@ -367,16 +384,92 @@ const MODEL_MAP = {
   custom: []
 };
 
+// Providers that take a free-text model name + an editable host/base URL
+// (local-ish endpoints whose model list we can't know ahead of time).
+function llmUsesModelInput(provider) { return provider === 'custom' || provider === 'ollama'; }
+function llmUsesBaseURL(provider)    { return provider === 'custom' || provider === 'ollama'; }
+
 async function loadLLMSettings() {
   const s = await api.settings.get();
   const llm = s.llm || {};
+
+  // Set up llmKeys map
+  llmKeys = llm.apiKeys || {};
+
+  // Backward compatibility check
+  if (llm.apiKey && !llmKeys[llm.provider]) {
+    llmKeys[llm.provider] = llm.apiKey;
+  }
+
+  const currentProvider = llm.provider || 'anthropic';
+
   document.getElementById('llmEnabled').checked = !!llm.enabled;
-  document.getElementById('llmProvider').value = llm.provider || 'anthropic';
-  document.getElementById('llmApiKey').value = llm.apiKey || '';
+  document.getElementById('llmProvider').value = currentProvider;
+  document.getElementById('llmApiKey').value = llmKeys[currentProvider] || '';
   document.getElementById('llmBaseURL').value = llm.baseURL || '';
+  document.getElementById('llmTimeout').value = llm.timeoutMs ? Math.round(llm.timeoutMs / 1000) : 900;
+  document.getElementById('llmMaxItems').value = llm.maxItems || 50;
   document.getElementById('llmDigestPrompt').value = llm.digestPrompt || 'Summarize the following content items into a concise daily digest:';
-  updateModelDropdown(llm.provider || 'anthropic', llm.model);
-  updateCustomURLVisibility(llm.provider);
+
+  const freeText = llmUsesModelInput(currentProvider);
+  document.getElementById('llmModelSelectGroup').style.display = freeText ? 'none' : 'block';
+  document.getElementById('llmModelInputGroup').style.display = freeText ? 'block' : 'none';
+  if (freeText) {
+    document.getElementById('llmModelInput').value = llm.model || '';
+  } else {
+    updateModelDropdown(currentProvider, llm.model);
+  }
+
+  updateCustomURLVisibility(currentProvider);
+  updateActiveProviderIndicator(s);
+  refreshDigestStatus();
+}
+
+function updateActiveProviderIndicator(settings) {
+  const indicator = document.getElementById('llmActiveIndicator');
+  if (!indicator) return;
+
+  const llm = settings?.llm || {};
+  if (!llm.enabled) {
+    indicator.className = 'llm-active-banner disabled';
+    indicator.innerHTML = `${icon('info')} Active Config: None (AI / LLM is disabled)`;
+    indicator.style.display = 'flex';
+    return;
+  }
+
+  indicator.className = 'llm-active-banner';
+  const provider = llm.provider || 'anthropic';
+  
+  const providerNames = {
+    anthropic: 'Anthropic (Claude)',
+    openai: 'OpenAI',
+    gemini: 'Google (Gemini)',
+    xai: 'xAI (Grok)',
+    groq: 'Groq',
+    ollama: 'Ollama (Local)',
+    custom: 'Custom endpoint'
+  };
+  const providerLabel = providerNames[provider] || provider;
+
+  if (provider === 'ollama') {
+    const url = llm.baseURL || 'http://localhost:11434/v1';
+    indicator.innerHTML = `${icon('check')} Active Config: ${providerLabel} (${url})`;
+  } else if (provider === 'custom') {
+    const url = llm.baseURL || 'no URL configured';
+    indicator.innerHTML = `${icon('check')} Active Config: ${providerLabel} (${url})`;
+  } else {
+    const rawKey = llm.apiKey || '';
+    let maskedKey = 'No key configured';
+    if (rawKey) {
+      if (rawKey.length <= 8) {
+        maskedKey = '••••••••';
+      } else {
+        maskedKey = rawKey.slice(0, 5) + '…' + rawKey.slice(-4);
+      }
+    }
+    indicator.innerHTML = `${icon('check')} Active Config: ${providerLabel} (Key: ${maskedKey})`;
+  }
+  indicator.style.display = 'flex';
 }
 
 function updateModelDropdown(provider, selected) {
@@ -386,25 +479,125 @@ function updateModelDropdown(provider, selected) {
 }
 
 function updateCustomURLVisibility(provider) {
-  document.getElementById('customBaseURLGroup').style.display = provider === 'custom' ? 'block' : 'none';
+  document.getElementById('customBaseURLGroup').style.display = llmUsesBaseURL(provider) ? 'block' : 'none';
+  const hint = document.getElementById('llmBaseURLHint');
+  if (hint) hint.style.display = provider === 'ollama' ? 'block' : 'none';
 }
 
 // Read the current LLM form values into a config object.
 function readLLMForm() {
+  const provider = document.getElementById('llmProvider').value;
+  const key = document.getElementById('llmApiKey').value.trim();
+  if (provider) {
+    llmKeys[provider] = key;
+  }
+  const model = llmUsesModelInput(provider)
+    ? document.getElementById('llmModelInput').value.trim()
+    : document.getElementById('llmModel').value;
+  const timeoutSec = parseInt(document.getElementById('llmTimeout').value, 10);
+  const maxItems = parseInt(document.getElementById('llmMaxItems').value, 10);
   return {
     enabled:      document.getElementById('llmEnabled').checked,
-    provider:     document.getElementById('llmProvider').value,
-    model:        document.getElementById('llmModel').value,
-    apiKey:       document.getElementById('llmApiKey').value.trim(),
+    provider:     provider,
+    model:        model,
+    apiKey:       key,
+    apiKeys:      llmKeys,
     baseURL:      document.getElementById('llmBaseURL').value.trim(),
+    timeoutMs:    Number.isFinite(timeoutSec) && timeoutSec > 0 ? timeoutSec * 1000 : 900000,
+    maxItems:     Number.isFinite(maxItems) && maxItems > 0 ? maxItems : 50,
     digestPrompt: document.getElementById('llmDigestPrompt').value.trim()
   };
 }
 
 async function saveLLMSettings() {
   const current = await api.settings.get();
-  await api.settings.save({ ...current, llm: readLLMForm() });
+  const newLLM = readLLMForm();
+  const updatedSettings = { ...current, llm: newLLM };
+  await api.settings.save(updatedSettings);
+  updateActiveProviderIndicator(updatedSettings);
+  refreshDigestStatus();
   showToast('LLM settings saved');
+}
+
+// ─── AI Digest status / generation spinner ────────────────────────────────────
+let digestElapsedTimer = null;
+
+function fmtElapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function setDigestGenerating(model, startedAt) {
+  const el = document.getElementById('llmDigestStatus');
+  if (!el) return;
+  const start = startedAt || Date.now();
+  const tick = () => {
+    el.className = 'llm-digest-status generating';
+    el.innerHTML = `<span class="spinner"></span><span>Generating with <strong>${escapeHTML(model || 'the model')}</strong>… ${fmtElapsed(Date.now() - start)}</span>`;
+  };
+  tick();
+  if (digestElapsedTimer) clearInterval(digestElapsedTimer);
+  digestElapsedTimer = setInterval(tick, 1000);
+  const btn = document.getElementById('btnGenerateDigestNow');
+  if (btn) btn.disabled = true;
+}
+
+function stopDigestTimer() {
+  if (digestElapsedTimer) { clearInterval(digestElapsedTimer); digestElapsedTimer = null; }
+  const btn = document.getElementById('btnGenerateDigestNow');
+  if (btn) btn.disabled = false;
+}
+
+function setDigestIdle(cache) {
+  const el = document.getElementById('llmDigestStatus');
+  if (!el) return;
+  stopDigestTimer();
+  if (!cache || (!cache.generatedAt && !cache.error)) {
+    el.className = 'llm-digest-status';
+    el.innerHTML = `${icon('info')} No AI digest generated yet.`;
+    return;
+  }
+  if (cache.error && !cache.hasSummary) {
+    el.className = 'llm-digest-status error';
+    el.innerHTML = `${icon('warning')} Last attempt failed: ${escapeHTML(cache.error)}`;
+    return;
+  }
+  const when = cache.generatedAt ? new Date(cache.generatedAt).toLocaleString() : 'unknown time';
+  let html = `${icon('check')} Last generated ${when}` + (cache.model ? ` with <strong>${escapeHTML(cache.model)}</strong>` : '');
+  if (cache.error) html += `<br><span class="form-hint">Latest refresh failed: ${escapeHTML(cache.error)}</span>`;
+  el.className = 'llm-digest-status ok';
+  el.innerHTML = html;
+}
+
+async function refreshDigestStatus() {
+  try {
+    const st = await api.llm.getDigestStatus();
+    if (st.inProgress) setDigestGenerating(st.model, st.startedAt);
+    else setDigestIdle(st.cache);
+  } catch {}
+}
+
+async function generateDigestNow() {
+  // Persist the current form first so generation uses the latest host/model/timeout.
+  try {
+    const current = await api.settings.get();
+    await api.settings.save({ ...current, llm: readLLMForm() });
+  } catch {}
+  setDigestGenerating(readLLMForm().model, Date.now());
+  try {
+    const res = await api.llm.generateDigestNow();
+    if (res && res.ok === false && res.error) {
+      stopDigestTimer();
+      const el = document.getElementById('llmDigestStatus');
+      if (el) { el.className = 'llm-digest-status error'; el.innerHTML = `${icon('warning')} ${escapeHTML(res.error)}`; }
+      showToast(res.error, 'error');
+    }
+  } catch (e) {
+    stopDigestTimer();
+    showToast(e.message, 'error');
+  } finally {
+    refreshDigestStatus();
+  }
 }
 
 async function testLLM() {
@@ -761,10 +954,28 @@ function setupEventListeners() {
   document.getElementById('btnSaveSource').addEventListener('click', saveSource);
   document.getElementById('btnSaveLLM').addEventListener('click', saveLLMSettings);
   document.getElementById('btnTestLLM').addEventListener('click', testLLM);
+  document.getElementById('btnGenerateDigestNow').addEventListener('click', generateDigestNow);
+  document.getElementById('settingAutoDigestMode').addEventListener('change', updateAutoDigestModeVisibility);
 
   document.getElementById('llmProvider').addEventListener('change', e => {
-    updateModelDropdown(e.target.value, null);
-    updateCustomURLVisibility(e.target.value);
+    const newProvider = e.target.value;
+    document.getElementById('llmApiKey').value = llmKeys[newProvider] || '';
+    const freeText = llmUsesModelInput(newProvider);
+    document.getElementById('llmModelSelectGroup').style.display = freeText ? 'none' : 'block';
+    document.getElementById('llmModelInputGroup').style.display = freeText ? 'block' : 'none';
+    if (freeText) {
+      document.getElementById('llmModelInput').value = '';
+    } else {
+      updateModelDropdown(newProvider, null);
+    }
+    updateCustomURLVisibility(newProvider);
+  });
+
+  document.getElementById('llmApiKey').addEventListener('input', e => {
+    const currentProvider = document.getElementById('llmProvider').value;
+    if (currentProvider) {
+      llmKeys[currentProvider] = e.target.value.trim();
+    }
   });
 
   // Content / Feed tab

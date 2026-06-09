@@ -62,6 +62,10 @@ function renderHTML(items, options = {}) {
   const {
     title = 'Personal Content Digest',
     aiDigest = null,
+    aiError = null,
+    aiPending = false,
+    aiPendingModel = null,
+    theme = 'dark',
     generatedAt = new Date(),
     readIds = new Set(),
     digestBrowser = 'internal',
@@ -106,7 +110,18 @@ function renderHTML(items, options = {}) {
     <section class="ai-digest">
       <h2>${icon('ai')} AI Digest</h2>
       <div class="ai-content">${marked.parse(aiDigest)}</div>
-    </section>` : '';
+    </section>` : (aiPending ? `
+    <section class="ai-digest">
+      <h2>${icon('ai')} AI Digest</h2>
+      <div class="ai-content" style="display:flex;align-items:center;gap:10px">
+        <span class="ai-spinner"></span>
+        <span>Generating with <strong>${escapeHTML(aiPendingModel || 'the model')}</strong>… this runs in the background. Reopen the digest in a moment.</span>
+      </div>
+    </section>` : (aiError ? `
+    <section class="ai-digest" style="background:rgba(209,52,56,0.1);border:1px solid rgba(209,52,56,0.4)">
+      <h2 style="color:#ff8a8a">${icon('ai')} AI Digest Generation Failed</h2>
+      <div class="ai-content" style="color:#ff8a8a">${escapeHTML(aiError)}</div>
+    </section>` : ''));
 
   const errorBanner = (sourceErrors && sourceErrors.length) ? `
     <section class="error-banner">
@@ -135,6 +150,31 @@ function renderHTML(items, options = {}) {
       --card-bg: rgba(255,255,255,0.04);
       --shadow: 0 4px 20px rgba(0,0,0,0.4);
       --nav-h: 0px;
+      --header-bg: linear-gradient(135deg, #0a0a1a 0%, #0f3460 100%);
+      --header-text: #60cdff;
+      --header-meta: #ababab;
+      --toolbar-bg: #08081a;
+      --scrollbar-thumb: rgba(255,255,255,0.20);
+      --scrollbar-thumb-hover: rgba(255,255,255,0.34);
+    }
+    body.theme-light {
+      --bg: #f3f3f3;
+      --surface: #ffffff;
+      --surface2: #e8ecf0;
+      --accent: #0078d4;
+      --accent2: #005a9e;
+      --text: #1a1a2e;
+      --text2: #444444;
+      --border: rgba(0,0,0,0.1);
+      --card-bg: rgba(0,0,0,0.03);
+      --shadow: 0 4px 20px rgba(0,0,0,0.08);
+      --header-bg: linear-gradient(135deg, #e8ecf0 0%, #c3d0db 100%);
+      --header-text: #005a9e;
+      --header-meta: #444444;
+      --toolbar-bg: #e8ecf0;
+      --scrollbar-thumb: rgba(0,0,0,0.22);
+      --scrollbar-thumb-hover: rgba(0,0,0,0.34);
+      color-scheme: light;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     /* Thin auto-hide scrollbars — invisible when idle, fade in while scrolling/hovering */
@@ -144,9 +184,9 @@ function renderHTML(items, options = {}) {
       background: transparent; border: 2px solid transparent; border-radius: 8px;
       background-clip: padding-box; transition: background 0.3s ease;
     }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.34); background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
     html.scrolling::-webkit-scrollbar-thumb,
-    html.scrolling *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.20); background-clip: padding-box; }
+    html.scrolling *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); background-clip: padding-box; }
     body {
       font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
       font-size: ${baseFontSize};
@@ -166,14 +206,14 @@ function renderHTML(items, options = {}) {
       position: sticky;
       top: 0;
       z-index: 200;
-      background: #08081a;
+      background: var(--toolbar-bg);
       border-bottom: 1px solid var(--border);
       padding: 5px 12px;
       height: 40px;
     }
     .nav-btn {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       color: var(--text2);
       border-radius: 5px;
       padding: 4px 9px;
@@ -187,7 +227,7 @@ function renderHTML(items, options = {}) {
       justify-content: center;
     }
     .nav-btn:disabled { opacity: 0.3; cursor: default; }
-    .nav-btn:not(:disabled):hover { background: rgba(255,255,255,0.14); color: var(--text); }
+    .nav-btn:not(:disabled):hover { background: var(--surface2); color: var(--text); }
     .nav-url {
       flex: 1;
       font-size: 11px;
@@ -195,8 +235,8 @@ function renderHTML(items, options = {}) {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       border-radius: 5px;
       padding: 3px 10px;
       min-width: 0;
@@ -221,7 +261,7 @@ function renderHTML(items, options = {}) {
     }
     .nav-btn-close:hover { background: rgba(0,120,212,0.3); border-color: var(--accent2); color: white; }
     .header {
-      background: linear-gradient(135deg, #0a0a1a 0%, #0f3460 100%);
+      background: var(--header-bg);
       border-bottom: 1px solid var(--border);
       padding: 24px 32px;
       display: flex;
@@ -232,8 +272,8 @@ function renderHTML(items, options = {}) {
       z-index: 100;
       backdrop-filter: blur(20px);
     }
-    .header-title { font-size: 22px; font-weight: 600; color: var(--accent2); }
-    .header-meta { color: var(--text2); font-size: 13px; }
+    .header-title { font-size: 22px; font-weight: 600; color: var(--header-text); }
+    .header-meta { color: var(--header-meta); font-size: 13px; }
     .header-stats { display: flex; gap: 16px; }
     .stat { background: var(--card-bg); padding: 6px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 6px; }
     .layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 80px - var(--nav-h)); }
@@ -275,6 +315,8 @@ function renderHTML(items, options = {}) {
     .ai-content h1,.ai-content h2,.ai-content h3 { color: var(--accent2); margin: 16px 0 8px; }
     .ai-content ul { padding-left: 20px; }
     .ai-content a { color: var(--accent2); }
+    .ai-spinner { width: 16px; height: 16px; flex: 0 0 auto; border: 2px solid var(--accent2); border-top-color: transparent; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
+    @keyframes ai-spin { to { transform: rotate(360deg); } }
     .section-header {
       font-size: 12px;
       text-transform: uppercase;
@@ -418,7 +460,7 @@ function renderHTML(items, options = {}) {
     }
   </style>
 </head>
-<body>
+<body class="theme-${theme}">
   <!-- Navigation toolbar — shown via JS when running inside the in-app viewer -->
   <div class="nav-toolbar" id="navToolbar">
     <button class="nav-btn" id="navBtnBack"    title="Back"    aria-label="Back"    disabled>${icon('back', 15)}</button>

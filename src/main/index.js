@@ -59,6 +59,9 @@ let scheduler = null;
 let captureServer = null;
 let isCollecting = false;
 let unreadCount = 0;
+// Tracks an in-flight AI digest generation so the UI can show a spinner and we
+// never run two at once.
+let aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
 let lastViewedAt = new Date(0);
 let digestHomePath = null;
 
@@ -270,26 +273,17 @@ async function openDigest() {
   const digestBrowser = settings.digestBrowser || 'internal';
 
   if (format === 'html') {
-    // Collect item IDs from the previous digest for diff highlighting
-    let previousItemIds = new Set();
-    try {
-      const history = await storage.getHistory();
-      const lastHtml = history.find(h => h.ext === 'html');
-      if (lastHtml && fs.existsSync(lastHtml.path)) {
-        const prevContent = fs.readFileSync(lastHtml.path, 'utf8');
-        for (const m of prevContent.matchAll(/data-id="([^"]+)"/g)) {
-          if (m[1]) previousItemIds.add(m[1]);
-        }
-      }
-    } catch {}
+    const previousItemIds = await getPreviousItemIds();
 
-    let aiDigest = null;
-    if (llmConfigured(settings.llm) && items.length) {
-      try { aiDigest = await generateDigest(settings.llm, items); } catch {}
-    }
+    // Read the cached AI digest instead of regenerating on every open. If the
+    // LLM is configured but there's no cached summary yet, kick one off in the
+    // background and show a "generating…" placeholder.
+    const { aiDigest, aiError, aiPending, aiPendingModel } = await resolveAIDigestForView(settings, items);
+
     const digestFontSize = settings.display?.digestFontSize || 'medium';
+    const theme = settings.display?.theme || 'dark';
     const sourceErrors = await getSourceErrors();
-    const html = renderHTML(items, { title: 'PulseKeeper Digest', aiDigest, readIds, digestBrowser, previousItemIds, digestFontSize, sourceErrors });
+    const html = renderHTML(items, { title: 'PulseKeeper Digest', theme, aiDigest, aiError, aiPending, aiPendingModel, readIds, digestBrowser, previousItemIds, digestFontSize, sourceErrors });
     const outPath = await storage.saveOutput('html', html);
     digestHomePath = outPath;
 
@@ -338,6 +332,19 @@ async function openDigest() {
           url
         });
 
+        const isLight = (settings.display?.theme || 'dark') === 'light';
+        const barBg = isLight ? '#e8ecf0' : '#08081a';
+        const barBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(96,205,255,0.15)';
+        const btnBg = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)';
+        const btnBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+        const btnColor = isLight ? '#1a1a2e' : '#ababab';
+        const closeBg = isLight ? 'rgba(0,120,212,0.08)' : 'rgba(0,120,212,0.15)';
+        const closeBorder = isLight ? 'rgba(0,120,212,0.25)' : 'rgba(0,120,212,0.35)';
+        const closeColor = isLight ? '#005a9e' : '#60cdff';
+        const urlBarBg = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)';
+        const urlBarBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+        const sepColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
+
         wc.executeJavaScript(`
 (function () {
   if (document.getElementById('__pk_nav__')) return; // already injected
@@ -346,22 +353,22 @@ async function openDigest() {
   bar.id = '__pk_nav__';
   bar.style.cssText = [
     'position:fixed','top:0','left:0','right:0','z-index:2147483647',
-    'height:40px','background:#08081a','border-bottom:1px solid rgba(96,205,255,0.15)',
+    'height:40px','background:${barBg}','border-bottom:1px solid ${barBorder}',
     'display:flex','align-items:center','gap:6px','padding:0 12px',
     'font-family:Segoe UI Variable,Segoe UI,system-ui,sans-serif',
     'font-size:13px','box-sizing:border-box'
   ].join(';');
 
   const btnStyle = [
-    'background:rgba(255,255,255,0.06)','border:1px solid rgba(255,255,255,0.1)',
-    'color:#ababab','border-radius:5px','padding:4px 9px','cursor:pointer',
+    'background:${btnBg}','border:1px solid ${btnBorder}',
+    'color:${btnColor}','border-radius:5px','padding:4px 9px','cursor:pointer',
     'font-size:14px','line-height:1','transition:all 0.15s','flex-shrink:0',
     'font-family:inherit','display:inline-flex','align-items:center','justify-content:center'
   ].join(';');
 
   const closeStyle = [
-    'background:rgba(0,120,212,0.15)','border:1px solid rgba(0,120,212,0.35)',
-    'color:#60cdff','border-radius:5px','padding:3px 11px','cursor:pointer',
+    'background:${closeBg}','border:1px solid ${closeBorder}',
+    'color:${closeColor}','border-radius:5px','padding:3px 11px','cursor:pointer',
     'font-size:12px','line-height:1.4','transition:all 0.15s','flex-shrink:0',
     'white-space:nowrap','font-family:inherit','display:inline-flex','align-items:center','gap:5px'
   ].join(';');
@@ -387,15 +394,15 @@ async function openDigest() {
   const btnBack     = mk('button', btnStyle, svg(ICN.back), 'Back');
   const btnForward  = mk('button', btnStyle, svg(ICN.forward), 'Forward');
   const btnReload   = mk('button', btnStyle, svg(ICN.reload), 'Reload');
-  const sep1        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
+  const sep1        = mk('div', 'width:1px;height:18px;background:${sepColor};flex-shrink:0');
   const urlBar      = mk('div',
-    'flex:1;min-width:0;font-size:11px;color:#ababab;overflow:hidden;text-overflow:ellipsis;' +
-    'white-space:nowrap;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);' +
+    'flex:1;min-width:0;font-size:11px;color:${btnColor};overflow:hidden;text-overflow:ellipsis;' +
+    'white-space:nowrap;background:${urlBarBg};border:1px solid ${urlBarBorder};' +
     'border-radius:5px;padding:3px 10px');
   urlBar.textContent = location.href;
-  const sep2        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
+  const sep2        = mk('div', 'width:1px;height:18px;background:${sepColor};flex-shrink:0');
   const btnExternal = mk('button', btnStyle, svg(ICN.external), 'Open in system browser');
-  const sep3        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
+  const sep3        = mk('div', 'width:1px;height:18px;background:${sepColor};flex-shrink:0');
   const btnClose    = mk('button', closeStyle, svg(ICN.close) + ' Digest', 'Return to digest');
 
   [btnBack, btnForward, btnReload, sep1, urlBar, sep2, btnExternal, sep3, btnClose]
@@ -470,32 +477,120 @@ async function openDigest() {
   }
 }
 
-// Auto-generate digest on schedule (no window opened — saves to history + notifies)
+// Collect item IDs from the previously saved HTML digest (for "new since last
+// digest" highlighting).
+async function getPreviousItemIds() {
+  const previousItemIds = new Set();
+  try {
+    const history = await storage.getHistory();
+    const lastHtml = history.find(h => h.ext === 'html');
+    if (lastHtml && fs.existsSync(lastHtml.path)) {
+      const prevContent = fs.readFileSync(lastHtml.path, 'utf8');
+      for (const m of prevContent.matchAll(/data-id="([^"]+)"/g)) {
+        if (m[1]) previousItemIds.add(m[1]);
+      }
+    }
+  } catch {}
+  return previousItemIds;
+}
+
+// Decide what AI summary to show when rendering a digest. Reads the cache; if
+// the LLM is configured but nothing is cached yet (and none is in flight), it
+// fires a background generation and reports a "pending" state.
+async function resolveAIDigestForView(settings, items) {
+  const cache = await storage.getAIDigest();
+  const aiDigest = cache?.markdown || null;
+  // Only surface a cached error if we have no good summary to show.
+  let aiError = (!aiDigest && cache?.error) ? cache.error : null;
+  let aiPending = false;
+  let aiPendingModel = null;
+
+  if (llmConfigured(settings.llm) && items.length) {
+    if (aiDigestState.inProgress) {
+      aiPending = true;
+      aiPendingModel = aiDigestState.model;
+    } else if (!aiDigest && !cache?.error) {
+      // Nothing cached yet — generate in the background (fire-and-forget).
+      aiPending = true;
+      aiPendingModel = settings.llm.model;
+      generateAIDigestNow('open').catch(() => {});
+    }
+  }
+  return { aiDigest, aiError, aiPending, aiPendingModel };
+}
+
+function getDigestStatus() {
+  return {
+    inProgress: aiDigestState.inProgress,
+    provider: aiDigestState.provider,
+    model: aiDigestState.model,
+    startedAt: aiDigestState.startedAt
+  };
+}
+
+// Generate the AI digest now, cache it, and broadcast progress so any open
+// window can show a spinner. Guards against concurrent runs. Returns a result
+// object rather than throwing so callers (schedule/open/manual) stay simple.
+async function generateAIDigestNow(reason = 'manual') {
+  const settings = await storage.getSettings();
+  if (!llmConfigured(settings.llm)) return { ok: false, error: 'LLM not configured' };
+  if (aiDigestState.inProgress) return { ok: false, inProgress: true, error: 'A digest is already being generated.' };
+
+  const items = await storage.getAllContent();
+  if (!items.length) return { ok: false, error: 'No content collected yet.' };
+
+  const provider = settings.llm.provider;
+  const model = settings.llm.model;
+  aiDigestState = { inProgress: true, provider, model, startedAt: Date.now() };
+  broadcastToAll('digest:generating', { provider, model, reason, startedAt: aiDigestState.startedAt });
+
+  try {
+    const markdown = await generateDigest(settings.llm, items);
+    await storage.saveAIDigest({ provider, model, markdown, itemCount: items.length, error: null });
+    aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
+    broadcastToAll('digest:generated', { provider, model, generatedAt: new Date().toISOString(), itemCount: items.length });
+    // Refresh an open digest window so it picks up the fresh summary.
+    if (digestWin && !digestWin.isDestroyed()) { openDigest().catch(() => {}); }
+    return { ok: true, markdown };
+  } catch (err) {
+    const msg = err.message || String(err);
+    console.error('[PulseKeeper] AI digest generation failed:', msg);
+    // Preserve the last good summary; just record the error alongside it.
+    const prev = await storage.getAIDigest();
+    await storage.saveAIDigest({
+      generatedAt: prev?.generatedAt || new Date().toISOString(),
+      provider, model,
+      markdown: prev?.markdown || null,
+      itemCount: prev?.itemCount ?? items.length,
+      error: msg,
+      erroredAt: new Date().toISOString()
+    });
+    aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
+    broadcastToAll('digest:error', { provider, model, message: msg });
+    return { ok: false, error: msg };
+  }
+}
+
+// Auto-generate digest on schedule (no window opened — saves output + notifies)
 async function autoGenerateDigest() {
   try {
-    const [items, settings, readIds] = await Promise.all([
+    // Generate + cache the AI summary first (spinner broadcasts handled inside).
+    await generateAIDigestNow('schedule');
+
+    const [items, settings, readIds, cache, previousItemIds] = await Promise.all([
       storage.getAllContent(),
       storage.getSettings(),
-      storage.getReadIds()
+      storage.getReadIds(),
+      storage.getAIDigest(),
+      getPreviousItemIds()
     ]);
-    let previousItemIds = new Set();
-    try {
-      const history = await storage.getHistory();
-      const lastHtml = history.find(h => h.ext === 'html');
-      if (lastHtml && fs.existsSync(lastHtml.path)) {
-        const prevContent = fs.readFileSync(lastHtml.path, 'utf8');
-        for (const m of prevContent.matchAll(/data-id="([^"]+)"/g)) {
-          if (m[1]) previousItemIds.add(m[1]);
-        }
-      }
-    } catch {}
-    let aiDigest = null;
-    if (llmConfigured(settings.llm) && items.length) {
-      try { aiDigest = await generateDigest(settings.llm, items); } catch {}
-    }
+    const aiDigest = cache?.markdown || null;
+    const aiError = (!aiDigest && cache?.error) ? cache.error : null;
     const html = renderHTML(items, {
       title: 'PulseKeeper Digest',
+      theme: settings.display?.theme || 'dark',
       aiDigest,
+      aiError,
       readIds,
       digestBrowser: settings.digestBrowser || 'internal',
       previousItemIds,
@@ -504,7 +599,7 @@ async function autoGenerateDigest() {
     });
     await storage.saveOutput('html', html);
     if (settings.notifications?.enabled !== false) {
-      notify('PulseKeeper — Daily Digest Ready', `${items.length} item${items.length !== 1 ? 's' : ''} collected. Click to open.`, () => openDigest());
+      notify('PulseKeeper — Digest Ready', `${items.length} item${items.length !== 1 ? 's' : ''} collected. Click to open.`, () => openDigest());
     }
   } catch (e) {
     console.error('[PulseKeeper] Auto-digest failed:', e.message);
@@ -512,7 +607,9 @@ async function autoGenerateDigest() {
 }
 
 async function generatePDF(items) {
-  const html = renderHTML(items, { title: 'PulseKeeper Digest' });
+  const settings = await storage.getSettings();
+  const theme = settings.display?.theme || 'dark';
+  const html = renderHTML(items, { title: 'PulseKeeper Digest', theme });
   const htmlPath = await storage.saveOutput('html', html);
   const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false } });
   await win.loadFile(htmlPath);
@@ -576,11 +673,24 @@ function setupIPC() {
   ipcMain.handle('output:exportMarkdown', async () => { const items = await storage.getAllContent(); const md = renderMarkdown(items, { title: 'PulseKeeper Digest' }); const p = await storage.saveOutput('markdown', md); shell.openPath(p); return p; });
   ipcMain.handle('output:exportAgentPack', async (_, scriptOnly) => { const s = await storage.getSettings(); return exportPack(s, scriptOnly); });
 
-  ipcMain.handle('llm:generateDigest', async () => {
-    const s = await storage.getSettings();
-    if (!llmConfigured(s.llm)) throw new Error('LLM not configured');
-    const items = await storage.getAllContent();
-    return generateDigest(s.llm, items);
+  // Manually (re)generate + cache the AI digest now. Returns a result object.
+  ipcMain.handle('llm:generateDigest', () => generateAIDigestNow('manual'));
+  ipcMain.handle('llm:generateDigestNow', () => generateAIDigestNow('manual'));
+
+  // Current generation state + last cached summary metadata, for the UI status.
+  ipcMain.handle('llm:getDigestStatus', async () => {
+    const cache = await storage.getAIDigest();
+    return {
+      ...getDigestStatus(),
+      cache: cache ? {
+        generatedAt: cache.generatedAt || null,
+        provider: cache.provider || null,
+        model: cache.model || null,
+        itemCount: cache.itemCount ?? null,
+        hasSummary: !!cache.markdown,
+        error: cache.error || null
+      } : null
+    };
   });
 
   // Connection test — uses the config passed from the form (or saved settings as

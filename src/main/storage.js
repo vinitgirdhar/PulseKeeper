@@ -14,6 +14,7 @@ const HISTORY_DIR   = path.join(DATA_DIR, 'history');
 const EXTENSION_DIR = path.join(DATA_DIR, 'extension');
 const READ_FILE   = path.join(DATA_DIR, 'read.json');
 const HEALTH_FILE = path.join(DATA_DIR, 'health.json');
+const AIDIGEST_FILE = path.join(DATA_DIR, 'ai-digest.json');
 
 const DEFAULT_SETTINGS = {
   refreshInterval: 30,
@@ -25,6 +26,8 @@ const DEFAULT_SETTINGS = {
   retentionDays: 3,
   autoDigest: {
     enabled: false,
+    mode: 'interval',      // 'interval' = every N hours, 'daily' = once at `time`
+    everyHours: 8,
     time: '08:00'
   },
   muteWords: [],
@@ -35,6 +38,9 @@ const DEFAULT_SETTINGS = {
     provider: 'anthropic',
     model: 'claude-sonnet-4-6',
     apiKey: '',
+    baseURL: '',
+    timeoutMs: 900000,     // 15 min — slow local CPU models need lots of headroom
+    maxItems: 50,          // how many items to summarize; lower = much faster locally
     generateDigest: true,
     digestPrompt: 'Summarize the following content items into a concise daily digest with key highlights and insights:'
   },
@@ -374,6 +380,19 @@ class Storage {
   getOutputDir()    { return OUTPUT_DIR; }
   getHistoryDir()   { return HISTORY_DIR; }
   getExtensionDir() { return EXTENSION_DIR; }
+
+  // ─── Cached AI Digest ─────────────────────────────────────────────────────────
+  // The AI summary is expensive (a slow local model can take minutes), so it's
+  // generated on a schedule and cached here. Opening the digest reads this cache
+  // instead of re-calling the model every time.
+  async getAIDigest() {
+    try { return JSON.parse(fs.readFileSync(AIDIGEST_FILE, 'utf8')); }
+    catch { return null; }
+  }
+
+  async saveAIDigest(data) {
+    await this._write(AIDIGEST_FILE, { generatedAt: new Date().toISOString(), ...data });
+  }
 
   // ─── Digest History ───────────────────────────────────────────────────────────
   async saveHistory(format, content) {

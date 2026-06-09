@@ -476,6 +476,45 @@ code { font-family: var(--font-mono); font-size: 12px; background: rgba(255,255,
 .llm-test-result .ltr-reply { color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
 .llm-test-result .ltr-label { color: var(--text); font-weight: 500; }
 
+/* ── LLM active configuration banner ── */
+.llm-active-banner {
+  padding: 12px 20px;
+  background: rgba(0, 120, 212, 0.08);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-light);
+}
+.llm-active-banner.disabled {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-disabled);
+}
+body.theme-light .llm-active-banner {
+  background: rgba(0, 120, 212, 0.05);
+  color: var(--accent);
+}
+body.theme-light .llm-active-banner.disabled {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-disabled);
+}
+
+/* AI digest generation status line (next to "Generate Now") */
+.llm-digest-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.llm-digest-status .spinner { width: 14px; height: 14px; }
+.llm-digest-status.generating { color: var(--accent-light); }
+.llm-digest-status.error { color: var(--red); }
+.llm-digest-status strong { color: var(--text); font-weight: 600; }
+
 /* ── Content / Feed tab ── */
 .feed-toolbar { padding: 0 20px 12px; display: flex; flex-direction: column; gap: 10px; }
 .feed-search { max-width: 420px; }

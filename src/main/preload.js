@@ -54,8 +54,10 @@ contextBridge.exposeInMainWorld('pcbAPI', {
 
   // LLM
   llm: {
-    generateDigest: () => ipcRenderer.invoke('llm:generateDigest'),
-    test:           (config) => ipcRenderer.invoke('llm:test', config)
+    generateDigest:    () => ipcRenderer.invoke('llm:generateDigest'),
+    generateDigestNow: () => ipcRenderer.invoke('llm:generateDigestNow'),
+    getDigestStatus:   () => ipcRenderer.invoke('llm:getDigestStatus'),
+    test:              (config) => ipcRenderer.invoke('llm:test', config)
   },
 
   // UI
@@ -83,6 +85,9 @@ contextBridge.exposeInMainWorld('pcbAPI', {
     navigate:        (fn) => { ipcRenderer.removeAllListeners('navigate');         ipcRenderer.on('navigate',         (_, tab) => fn(tab)); },
     backupImported:  (fn) => { ipcRenderer.removeAllListeners('backup:imported');  ipcRenderer.on('backup:imported',  (_, d) => fn(d)); },
     sourcesUpdated:  (fn) => { ipcRenderer.removeAllListeners('sources:updated');  ipcRenderer.on('sources:updated',  (_, d) => fn(d)); },
-    themeOsSync:     (fn) => { ipcRenderer.removeAllListeners('theme:osSync');     ipcRenderer.on('theme:osSync',     (_, d) => fn(d)); }
+    themeOsSync:     (fn) => { ipcRenderer.removeAllListeners('theme:osSync');     ipcRenderer.on('theme:osSync',     (_, d) => fn(d)); },
+    digestGenerating:(fn) => { ipcRenderer.removeAllListeners('digest:generating'); ipcRenderer.on('digest:generating', (_, d) => fn(d)); },
+    digestGenerated: (fn) => { ipcRenderer.removeAllListeners('digest:generated');  ipcRenderer.on('digest:generated',  (_, d) => fn(d)); },
+    digestError:     (fn) => { ipcRenderer.removeAllListeners('digest:error');      ipcRenderer.on('digest:error',      (_, d) => fn(d)); }
   }
 });

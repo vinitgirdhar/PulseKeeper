@@ -27,6 +27,12 @@ let activeFilter = 'all';
 let searchQuery = '';
 
 async function init() {
+  try {
+    const settings = await api.settings.get();
+    const theme = settings.display?.theme || 'dark';
+    document.body.className = theme === 'light' ? 'theme-light' : '';
+  } catch {}
+
   await refresh();
   initFilterScroll();
 
@@ -70,10 +76,17 @@ async function refresh() {
   const list = document.getElementById('itemsList');
   list.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading…</span></div>';
   try {
-    [allItems, readIds] = await Promise.all([
+    const [latestItems, readIdsArr, settings] = await Promise.all([
       api.popup.getLatest(),
-      api.content.getReadIds().then(arr => new Set(arr))
+      api.content.getReadIds(),
+      api.settings.get()
     ]);
+    allItems = latestItems;
+    readIds = new Set(readIdsArr);
+
+    const theme = settings.display?.theme || 'dark';
+    document.body.className = theme === 'light' ? 'theme-light' : '';
+
     renderFilters();
     renderItems();
   } catch (e) {

@@ -17,7 +17,7 @@ const PROVIDERS = {
   openai: {
     label: 'OpenAI',
     baseURL: 'https://api.openai.com/v1',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o3-mini']
+    models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3-mini']
   },
   gemini: {
     label: 'Google (Gemini)',
@@ -43,11 +43,23 @@ function getProviders() {
   return Object.entries(PROVIDERS).map(([id, p]) => ({ id, ...p }));
 }
 
-// Resolve the endpoint for a config (custom uses the user-supplied baseURL).
+// Resolve the endpoint for a config. `custom` always uses the user-supplied
+// baseURL. `ollama` honours a user-supplied baseURL too (so it can point at a
+// LAN box like http://192.168.1.95:11434/v1), falling back to localhost.
 function resolveBaseURL(llmConfig) {
   const { provider, baseURL } = llmConfig;
-  if (provider === 'custom') return (baseURL || '').trim();
-  return PROVIDERS[provider]?.baseURL || (baseURL || '').trim();
+  const userURL = (baseURL || '').trim();
+  if (provider === 'custom') return userURL;
+  if (provider === 'ollama') return userURL || PROVIDERS.ollama.baseURL;
+  return PROVIDERS[provider]?.baseURL || userURL;
+}
+
+// Local models (esp. CPU Ollama) can take minutes to generate a long digest, so
+// the request timeout must be generous. Honour an explicit per-config override
+// (`timeoutMs`); otherwise fall back to the provided default.
+function resolveTimeout(llmConfig, fallbackMs) {
+  const t = Number(llmConfig.timeoutMs);
+  return Number.isFinite(t) && t > 0 ? t : fallbackMs;
 }
 
 // Build an OpenAI-SDK client pointed at the right provider endpoint.
@@ -137,7 +149,8 @@ async function testConnection(llmConfig) {
   const started = Date.now();
   try {
     const response = await client.chat.completions.create(
-      chatParams(llmConfig, [{ role: 'user', content: 'Reply with exactly: PulseKeeper connection OK' }], 64, 0)
+      chatParams(llmConfig, [{ role: 'user', content: 'Reply with exactly: PulseKeeper connection OK' }], 64, 0),
+      { timeout: resolveTimeout(llmConfig, 60000) }
     );
     const reply = response.choices?.[0]?.message?.content?.trim() || '(model returned an empty response)';
     return { ok: true, provider, model, reply, latencyMs: Date.now() - started };
@@ -147,11 +160,16 @@ async function testConnection(llmConfig) {
 }
 
 async function generateDigest(llmConfig, contentItems) {
-  const { provider, model, digestPrompt } = llmConfig;
+  const { provider, digestPrompt } = llmConfig;
   const client = buildClient(llmConfig);
 
+  // Cap how many items go into the prompt. Fewer items = much faster on slow
+  // local models (prompt prefill dominates), so this is configurable.
+  const n = Number(llmConfig.maxItems);
+  const maxItems = Number.isFinite(n) && n > 0 ? n : 50;
+
   // Format content items for the prompt
-  const contentText = contentItems.slice(0, 50).map((item, i) =>
+  const contentText = contentItems.slice(0, maxItems).map((item, i) =>
     `[${i + 1}] ${item.sourceName || item.sourceType || 'Unknown'} — ${item.title}\n${item.description || ''}\nURL: ${item.url}\nDate: ${item.publishedAt}`
   ).join('\n\n---\n\n');
 
@@ -163,7 +181,8 @@ async function generateDigest(llmConfig, contentItems) {
       chatParams(llmConfig, [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
-      ], 4000, 0.5)
+      ], 4000, 0.5),
+      { timeout: resolveTimeout(llmConfig, 900000) }
     );
     return response.choices[0]?.message?.content || '';
   } catch (err) {
