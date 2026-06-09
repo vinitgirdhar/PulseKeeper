@@ -65,6 +65,7 @@ function renderHTML(items, options = {}) {
     aiError = null,
     aiPending = false,
     aiPendingModel = null,
+    aiGeneratedAt = null,
     theme = 'dark',
     generatedAt = new Date(),
     readIds = new Set(),
@@ -106,9 +107,10 @@ function renderHTML(items, options = {}) {
   const newSinceCount = prevIds.size > 0 ? items.filter(i => !prevIds.has(i.id)).length : 0;
   const itemsHTML = items.map(item => renderItemHTML(item, readIdsSet, prevIds)).join('\n');
 
+  const aiAgo = aiGeneratedAt ? timeAgo(aiGeneratedAt) : null;
   const aiSection = aiDigest ? `
     <section class="ai-digest">
-      <h2>${icon('ai')} AI Digest</h2>
+      <h2>${icon('ai')} AI Digest${aiAgo ? `<span class="ai-ago">updated ${escapeHTML(aiAgo)}</span>` : ''}</h2>
       <div class="ai-content">${marked.parse(aiDigest)}</div>
     </section>` : (aiPending ? `
     <section class="ai-digest">
@@ -310,7 +312,8 @@ function renderHTML(items, options = {}) {
     .error-banner-head { font-size: 14px; font-weight: 600; color: #ff8a8a; margin-bottom: 8px; }
     .error-banner-list { margin: 0; padding-left: 20px; font-size: 13px; color: var(--text2); line-height: 1.7; }
     .error-banner-list strong { color: var(--text); }
-    .ai-digest h2 { font-size: 16px; margin-bottom: 16px; color: var(--accent2); }
+    .ai-digest h2 { font-size: 16px; margin-bottom: 16px; color: var(--accent2); display: flex; align-items: baseline; gap: 10px; }
+    .ai-ago { font-size: 12px; font-weight: 400; color: var(--text2); }
     .ai-content { font-size: 14px; line-height: 1.7; color: var(--text); }
     .ai-content h1,.ai-content h2,.ai-content h3 { color: var(--accent2); margin: 16px 0 8px; }
     .ai-content ul { padding-left: 20px; }
@@ -703,6 +706,20 @@ function escapeHTML(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Human-friendly relative time, e.g. "just now", "10 min ago", "1 hour ago".
+function timeAgo(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (!isFinite(sec)) return '';
+  if (sec < 45) return 'just now';
+  const mins = Math.round(sec / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
 
 module.exports = { renderHTML, renderMarkdown, SOURCE_COLORS };

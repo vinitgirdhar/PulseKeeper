@@ -52,6 +52,8 @@ async function init() {
   api.on.digestGenerating(d => setDigestGenerating(d.model, d.startedAt));
   api.on.digestGenerated(() => { refreshDigestStatus(); showToast('AI digest ready'); });
   api.on.digestError(d => { refreshDigestStatus(); showToast(`AI digest failed: ${d.message}`, 'error'); });
+  // Keep the "updated X ago" label fresh, but never while a generation spinner is running.
+  setInterval(() => { if (!digestElapsedTimer) refreshDigestStatus(); }, 60000);
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
@@ -527,6 +529,19 @@ function fmtElapsed(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// Human-friendly relative time, e.g. "just now", "10 min ago", "1 hour ago".
+function timeAgo(date) {
+  const sec = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (!isFinite(sec)) return '';
+  if (sec < 45) return 'just now';
+  const mins = Math.round(sec / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
+}
+
 function setDigestGenerating(model, startedAt) {
   const el = document.getElementById('llmDigestStatus');
   if (!el) return;
@@ -562,8 +577,9 @@ function setDigestIdle(cache) {
     el.innerHTML = `${icon('warning')} Last attempt failed: ${escapeHTML(cache.error)}`;
     return;
   }
-  const when = cache.generatedAt ? new Date(cache.generatedAt).toLocaleString() : 'unknown time';
-  let html = `${icon('check')} Last generated ${when}` + (cache.model ? ` with <strong>${escapeHTML(cache.model)}</strong>` : '');
+  const abs = cache.generatedAt ? new Date(cache.generatedAt).toLocaleString() : '';
+  const rel = cache.generatedAt ? timeAgo(cache.generatedAt) : 'unknown time';
+  let html = `${icon('check')} Updated <span title="${escapeHTML(abs)}">${escapeHTML(rel)}</span>` + (cache.model ? ` with <strong>${escapeHTML(cache.model)}</strong>` : '');
   if (cache.error) html += `<br><span class="form-hint">Latest refresh failed: ${escapeHTML(cache.error)}</span>`;
   el.className = 'llm-digest-status ok';
   el.innerHTML = html;
