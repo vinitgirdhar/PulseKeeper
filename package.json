@@ -1,0 +1,99 @@
+{
+  "name": "pulsekeeper",
+  "version": "1.1.0",
+  "description": "PulseKeeper — keep your pulse on the content that matters. Aggregates YouTube, podcasts, blogs, RSS feeds, newsletters, Reddit, and web pages.",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron --no-deprecation .",
+    "generate-ico": "node scripts/generate-ico.js",
+    "prebuild": "node scripts/generate-ico.js",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir",
+    "build:portable": "electron-builder --win portable",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": [
+    "electron",
+    "rss",
+    "content",
+    "aggregator",
+    "windows",
+    "pulsekeeper"
+  ],
+  "author": "rod-trent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vinitgirdhar/PulseKeeper.git"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "marked": "^12.0.0",
+    "node-cron": "^3.0.3",
+    "openai": "^4.77.0",
+    "rss-parser": "^3.13.0",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "png2icons": "^2.0.1"
+  },
+  "build": {
+    "appId": "com.rodtrent.pulsekeeper",
+    "productName": "PulseKeeper",
+    "artifactName": "PulseKeeper-Setup-${version}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PulseKeeper",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "license": "LICENSE"
+    },
+    "portable": {
+      "artifactName": "PulseKeeper-Portable-${version}.${ext}"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts/",
+        "to": "scripts/"
+      },
+      {
+        "from": "extension/",
+        "to": "extension/"
+      },
+      {
+        "from": "assets/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "assets/icon.png",
+        "to": "icon.png"
+      }
+    ]
+  }
+}
