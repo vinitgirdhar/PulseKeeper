@@ -73,14 +73,16 @@
     <!-- ── Sources Tab ── -->
     <div id="tab-sources" class="tab-content">
       <div class="page-header">
-        <div>
-          <div class="page-title">Content Sources</div>
-          <div class="page-subtitle">Manage your feeds, channels, and monitored pages</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnImportOPML"><span data-icon="import"></span> Import OPML</button>
-          <button class="btn btn-secondary" id="btnRefreshAll"><span data-icon="refresh"></span> Refresh All</button>
-          <button class="btn btn-primary" id="btnAddSource"><span data-icon="plus"></span> Add Source</button>
+        <div class="page-header-content">
+          <div>
+            <div class="page-title">Content Sources</div>
+            <div class="page-subtitle">Manage your feeds, channels, and monitored pages</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" id="btnImportOPML"><span data-icon="import"></span> Import OPML</button>
+            <button class="btn btn-secondary" id="btnRefreshAll"><span data-icon="refresh"></span> Refresh All</button>
+            <button class="btn btn-primary" id="btnAddSource"><span data-icon="plus"></span> Add Source</button>
+          </div>
         </div>
       </div>
       <div class="feed-toolbar">
@@ -100,13 +102,15 @@
     <!-- ── Content / Feed Tab ── -->
     <div id="tab-feed" class="tab-content" style="display:none">
       <div class="page-header">
-        <div>
-          <div class="page-title">Content</div>
-          <div class="page-subtitle">All items collected from your sources</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnFeedMarkAllRead">✓ Mark all read</button>
-          <button class="btn btn-secondary" id="btnFeedRefresh">🔄 Refresh All</button>
+        <div class="page-header-content">
+          <div>
+            <div class="page-title">Content</div>
+            <div class="page-subtitle">All items collected from your sources</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" id="btnFeedMarkAllRead">✓ Mark all read</button>
+            <button class="btn btn-secondary" id="btnFeedRefresh">🔄 Refresh All</button>
+          </div>
         </div>
       </div>
       <div class="feed-toolbar">
@@ -121,15 +125,17 @@
     <!-- ── Threats / IoCs Tab ── -->
     <div id="tab-threats" class="tab-content" style="display:none">
       <div class="page-header">
-        <div>
-          <div class="page-title">Threats &amp; Indicators</div>
-          <div class="page-subtitle">IoCs extracted from collected content — IPs, domains, URLs, file hashes, CVEs &amp; emails</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnThreatsRefresh">🔄 Rescan</button>
-          <button class="btn btn-secondary" id="btnThreatsExportCsv">Export CSV</button>
-          <button class="btn btn-secondary" id="btnThreatsExportJson">Export JSON</button>
-          <button class="btn btn-secondary" id="btnThreatsExportStix">Export STIX</button>
+        <div class="page-header-content">
+          <div>
+            <div class="page-title">Threats &amp; Indicators</div>
+            <div class="page-subtitle">IoCs extracted from collected content — IPs, domains, URLs, file hashes, CVEs &amp; emails</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" id="btnThreatsRefresh">🔄 Rescan</button>
+            <button class="btn btn-secondary" id="btnThreatsExportCsv">Export CSV</button>
+            <button class="btn btn-secondary" id="btnThreatsExportJson">Export JSON</button>
+            <button class="btn btn-secondary" id="btnThreatsExportStix">Export STIX</button>
+          </div>
         </div>
       </div>
       <div class="feed-toolbar">
@@ -145,16 +151,18 @@
     <!-- ── Settings Tab ── -->
     <div id="tab-settings" class="tab-content" style="display:none">
       <div class="page-header">
-        <div>
-          <div class="page-title">Settings</div>
-          <div class="page-subtitle">Configure refresh schedule and output preferences</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-primary" id="btnSaveSettings">Save Settings</button>
+        <div class="page-header-content">
+          <div>
+            <div class="page-title">Settings</div>
+            <div class="page-subtitle">Configure refresh schedule and output preferences</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btnSaveSettings">Save Settings</button>
+          </div>
         </div>
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:20px;">
-        <div class="card">
+        <div class="card card-blue">
           <div class="card-header"><h3><span data-icon="refresh"></span> Collection</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
             <div class="form-group">
@@ -194,7 +202,7 @@
             </div>
           </div>
         </div>
-        <div class="card">
+        <div class="card card-blue">
           <div class="card-header"><h3><span data-icon="document"></span> Output Format</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
             <div class="form-group">
@@ -223,7 +231,7 @@
             </div>
           </div>
         </div>
-        <div class="card">
+        <div class="card card-blue">
           <div class="card-header">
             <h3><span data-icon="alarm"></span> Auto Digest</h3>
             <label class="toggle"><input type="checkbox" id="settingAutoDigestEnabled"><span class="toggle-slider"></span></label>
@@ -247,7 +255,7 @@
             </div>
           </div>
         </div>
-        <div class="card">
+        <div class="card card-blue">
           <div class="card-header"><h3><span data-icon="bell"></span> Notifications</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
             <div style="display:flex;align-items:center;justify-content:space-between">
@@ -260,7 +268,7 @@
             </div>
           </div>
         </div>
-        <div class="card card-span-full">
+        <div class="card card-span-full card-gray">
           <div class="card-header"><h3><span data-icon="mute"></span> Mute Words</h3></div>
           <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
             <p style="font-size:12px">Items whose title or description contains any of these words will be hidden. Separate with commas.</p>
@@ -274,9 +282,27 @@
               <div><div style="font-size:13px;font-weight:500">Extract indicators of compromise</div><div class="form-hint">Parse IPs, domains, URLs, file hashes &amp; CVEs from collected items and tag severity. Populates the Threats tab.</div></div>
               <label class="toggle"><input type="checkbox" id="settingIocExtraction" checked><span class="toggle-slider"></span></label>
             </div>
+            <div class="form-group" style="margin-top:8px">
+              <label class="form-label">Alert Words</label>
+              <div class="form-hint" style="margin-bottom:6px">Items containing these words are highlighted as Threat Alerts and marked Critical. Separate with commas.</div>
+              <textarea class="textarea mute-textarea" id="settingAlertWords" placeholder="zero-day, ransomware, exploit, apt…"></textarea>
+            </div>
           </div>
         </div>
         <div class="card">
+          <div class="card-header">
+            <h3><span data-icon="plug"></span> Webhooks / SIEM Push</h3>
+            <label class="toggle"><input type="checkbox" id="settingWebhookEnabled"><span class="toggle-slider"></span></label>
+          </div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+            <p style="font-size:12px;color:var(--text-secondary)">Pushes new high and critical threat indicators automatically via HTTP POST request in the background.</p>
+            <div class="form-group">
+              <label class="form-label">Webhook URL</label>
+              <input type="url" class="input" id="settingWebhookUrl" placeholder="https://your-siem-or-webhook-receiver/endpoint">
+            </div>
+          </div>
+        </div>
+        <div class="card card-gray">
           <div class="card-header"><h3><span data-icon="save"></span> Backup &amp; Restore</h3></div>
           <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-secondary" id="btnExportBackup"><span data-icon="upload"></span> Export Backup</button>
@@ -289,13 +315,15 @@
     <!-- ── LLM Tab ── -->
     <div id="tab-llm" class="tab-content" style="display:none">
       <div class="page-header">
-        <div>
-          <div class="page-title">AI / LLM</div>
-          <div class="page-subtitle">Generate AI-powered digests using any LLM provider</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnTestLLM">Test Connection</button>
-          <button class="btn btn-primary" id="btnSaveLLM">Save</button>
+        <div class="page-header-content">
+          <div>
+            <div class="page-title">AI / LLM</div>
+            <div class="page-subtitle">Generate AI-powered digests using any LLM provider</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" id="btnTestLLM">Test Connection</button>
+            <button class="btn btn-primary" id="btnSaveLLM">Save</button>
+          </div>
         </div>
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:20px;">
@@ -366,6 +394,13 @@
             </div>
             <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
               <div>
+                <label class="form-label" style="margin:0">Threat attribution (AI)</label>
+                <div class="form-hint">Identify and tag Threat Actors (e.g. APT29) and MITRE ATT&CK techniques in digest summaries.</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="llmAiAttribution"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+              <div>
                 <label class="form-label" style="margin:0">Per-category digests</label>
                 <div class="form-hint">Group items by their source's Category and summarize each with its own prompt. Runs one model call per category — slower on local models.</div>
               </div>
@@ -413,12 +448,14 @@
     <!-- ── Health Tab ── -->
     <div id="tab-health" class="tab-content" style="display:none">
       <div class="page-header">
-        <div>
-          <div class="page-title">Source Health</div>
-          <div class="page-subtitle">Fetch metrics and error status for each source</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnRefreshHealth"><span data-icon="refresh"></span> Refresh</button>
+        <div class="page-header-content">
+          <div>
+            <div class="page-title">Source Health</div>
+            <div class="page-subtitle">Fetch metrics and error status for each source</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" id="btnRefreshHealth"><span data-icon="refresh"></span> Refresh</button>
+          </div>
         </div>
       </div>
       <div style="padding:20px">
@@ -429,7 +466,9 @@
     <!-- ── Export Tab ── -->
     <div id="tab-export" class="tab-content" style="display:none">
       <div class="page-header">
-        <div><div class="page-title">Export</div><div class="page-subtitle">Generate output and integrate with AgentPlatform</div></div>
+        <div class="page-header-content">
+          <div><div class="page-title">Export</div><div class="page-subtitle">Generate output and integrate with AgentPlatform</div></div>
+        </div>
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px;">
         <div class="card">
@@ -486,7 +525,9 @@
     <!-- ── Extension Tab ── -->
     <div id="tab-extension" class="tab-content" style="display:none">
       <div class="page-header">
-        <div><div class="page-title">Browser Extension</div><div class="page-subtitle">Send pages and selections from Chrome/Edge directly to PulseKeeper</div></div>
+        <div class="page-header-content">
+          <div><div class="page-title">Browser Extension</div><div class="page-subtitle">Send pages and selections from Chrome/Edge directly to PulseKeeper</div></div>
+        </div>
       </div>
       <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px;">
         <div class="card">
@@ -527,7 +568,9 @@
     <!-- ── About Tab ── -->
     <div id="tab-about" class="tab-content" style="display:none">
       <div class="page-header">
-        <div><div class="page-title">About PulseKeeper</div></div>
+        <div class="page-header-content">
+          <div><div class="page-title">About PulseKeeper</div></div>
+        </div>
       </div>
       <div style="padding:20px;max-width:560px;display:flex;flex-direction:column;gap:16px;">
         <div class="card">
@@ -582,6 +625,18 @@
           <option value="">Select a type…</option>
         </select>
         <div class="form-hint" id="sourceTypeHint"></div>
+      </div>
+      <div class="form-group" id="presetGroup">
+        <label class="form-label">Threat Intel Presets (Optional)</label>
+        <select class="select" id="sourcePreset" onchange="onPresetChange()">
+          <option value="">-- Select a Quick Preset --</option>
+          <option value="abusech-urlhaus">Abuse.ch URLhaus (Malware URLs)</option>
+          <option value="cisa-kev">CISA Known Exploited Vulnerabilities</option>
+          <option value="sans-isc">SANS Internet Storm Center (RSS)</option>
+          <option value="vxunderground">vx-underground (RSS)</option>
+          <option value="bleeping">BleepingComputer (RSS)</option>
+        </select>
+        <div class="form-hint">Selecting a preset automatically configures all settings.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Display Name</label>

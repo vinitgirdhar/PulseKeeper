@@ -6,41 +6,41 @@
   <title>PulseKeeper</title>
   <style>
     :root {
-      --bg: rgba(26, 26, 46, 0.95);
-      --surface: rgba(22, 33, 62, 0.96);
-      --surface-hover: rgba(255, 255, 255, 0.05);
-      --surface-active: rgba(0, 120, 212, 0.15);
-      --accent: #0078d4;
-      --accent-light: #60cdff;
-      --text: #f3f3f3;
-      --text2: #ababab;
-      --border: rgba(255, 255, 255, 0.08);
-      --border-focus: rgba(0, 120, 212, 0.6);
+      --bg: #0f1115;
+      --surface: #161920;
+      --surface-hover: rgba(255, 255, 255, 0.04);
+      --surface-active: rgba(224, 79, 61, 0.15);
+      --accent: #e04f3d;
+      --accent-light: #f06a5a;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --border: #232a35;
+      --border-focus: #e04f3d;
       --font: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
       --scrollbar-thumb: rgba(255, 255, 255, 0.15);
       --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
-      --header-bg: rgba(96, 205, 255, 0.06);
+      --header-bg: #1b1e26;
       --btn-bg: rgba(255, 255, 255, 0.06);
       --input-bg: rgba(255, 255, 255, 0.05);
-      --shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+      --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     body.theme-light {
-      --bg: rgba(243, 243, 243, 0.96);
-      --surface: rgba(255, 255, 255, 0.97);
-      --surface-hover: rgba(0, 0, 0, 0.04);
-      --surface-active: rgba(0, 120, 212, 0.1);
-      --accent: #0078d4;
-      --accent-light: #005a9e;
-      --text: #1a1a2e;
-      --text2: #444444;
-      --border: rgba(0, 0, 0, 0.1);
-      --border-focus: rgba(0, 120, 212, 0.5);
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --surface-hover: rgba(30, 34, 41, 0.04);
+      --surface-active: rgba(224, 79, 61, 0.08);
+      --accent: #e04f3d;
+      --accent-light: #f06a5a;
+      --text: #1e2229;
+      --text2: #5c6b73;
+      --border: #e2e8f0;
+      --border-focus: #e04f3d;
       --scrollbar-thumb: rgba(0, 0, 0, 0.15);
       --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
-      --header-bg: rgba(0, 120, 212, 0.08);
+      --header-bg: #1b1e26;
       --btn-bg: rgba(0, 0, 0, 0.05);
       --input-bg: rgba(0, 0, 0, 0.04);
-      --shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+      --shadow: 0 4px 12px rgba(30, 34, 41, 0.08);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: var(--font); background: transparent; color: var(--text); font-size: 13px; -webkit-font-smoothing: antialiased; overflow: hidden; }
@@ -52,32 +52,42 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      backdrop-filter: blur(40px) saturate(180%);
       box-shadow: var(--shadow);
     }
     .popup-header {
       padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       display: flex;
       align-items: center;
       justify-content: space-between;
       background: var(--header-bg);
+      color: #ffffff;
       flex-shrink: 0;
     }
-    .popup-title {
-      font-size: 14px; font-weight: 600; color: var(--accent-light);
+    .popup-header .popup-title {
+      font-size: 14px; font-weight: 600; color: #ffffff;
       display: flex; align-items: center; gap: 8px;
     }
     .pk-logo { width: 18px; height: 18px; }
     .popup-actions { display: flex; gap: 4px; align-items: center; }
     .popup-btn {
       padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: var(--font);
-      cursor: pointer; border: 1px solid var(--border); background: var(--btn-bg);
-      color: var(--text2); transition: all 0.15s;
+      cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #e2e8f0 !important; transition: all 0.15s;
     }
-    .popup-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
-    .popup-btn:hover { background: var(--surface-hover); color: var(--text); }
-    .popup-btn.primary:hover { background: #006cbe; }
+    .popup-header .popup-btn:hover {
+      background: rgba(255, 255, 255, 0.15) !important;
+      color: #ffffff !important;
+    }
+    .popup-btn.primary {
+      background: var(--accent) !important;
+      color: white !important;
+      border-color: var(--accent) !important;
+    }
+    .popup-btn.primary:hover {
+      background: var(--accent-light) !important;
+    }
     .pk-icon { display: inline-block; vertical-align: -0.14em; flex-shrink: 0; }
     .popup-btn .pk-icon { width: 15px; height: 15px; vertical-align: middle; }
     .popup-btn { display: inline-flex; align-items: center; gap: 4px; }

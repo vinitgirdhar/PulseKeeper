@@ -131,41 +131,41 @@ function renderHTML(items, options = {}) {
   <title>${escapeHTML(title)}</title>
   <style>
     :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --surface2: #0f3460;
-      --accent: #0078d4;
-      --accent2: #60cdff;
-      --text: #f3f3f3;
-      --text2: #ababab;
-      --border: rgba(255,255,255,0.08);
-      --card-bg: rgba(255,255,255,0.04);
-      --shadow: 0 4px 20px rgba(0,0,0,0.4);
+      --bg: #0f1115;
+      --surface: #161920;
+      --surface2: #1d212b;
+      --accent: #e04f3d;
+      --accent2: #f06a5a;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --border: #232a35;
+      --card-bg: rgba(255,255,255,0.02);
+      --shadow: 0 4px 12px rgba(0,0,0,0.3);
       --nav-h: 0px;
-      --header-bg: linear-gradient(135deg, #0a0a1a 0%, #0f3460 100%);
-      --header-text: #60cdff;
-      --header-meta: #ababab;
-      --toolbar-bg: #08081a;
-      --scrollbar-thumb: rgba(255,255,255,0.20);
-      --scrollbar-thumb-hover: rgba(255,255,255,0.34);
+      --header-bg: #1b1e26;
+      --header-text: #ffffff;
+      --header-meta: #8a99ad;
+      --toolbar-bg: #14171e;
+      --scrollbar-thumb: rgba(255,255,255,0.1);
+      --scrollbar-thumb-hover: rgba(255,255,255,0.2);
     }
     body.theme-light {
-      --bg: #f3f3f3;
+      --bg: #f4f5f7;
       --surface: #ffffff;
-      --surface2: #e8ecf0;
-      --accent: #0078d4;
-      --accent2: #005a9e;
-      --text: #1a1a2e;
-      --text2: #444444;
-      --border: rgba(0,0,0,0.1);
-      --card-bg: rgba(0,0,0,0.03);
-      --shadow: 0 4px 20px rgba(0,0,0,0.08);
-      --header-bg: linear-gradient(135deg, #e8ecf0 0%, #c3d0db 100%);
-      --header-text: #005a9e;
-      --header-meta: #444444;
-      --toolbar-bg: #e8ecf0;
-      --scrollbar-thumb: rgba(0,0,0,0.22);
-      --scrollbar-thumb-hover: rgba(0,0,0,0.34);
+      --surface2: #f8fafc;
+      --accent: #e04f3d;
+      --accent2: #0284c7;
+      --text: #1e2229;
+      --text2: #5c6b73;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --shadow: 0 4px 12px rgba(30, 34, 41, 0.06);
+      --header-bg: #1b1e26;
+      --header-text: #ffffff;
+      --header-meta: #8a99ad;
+      --toolbar-bg: #14171e;
+      --scrollbar-thumb: rgba(0,0,0,0.15);
+      --scrollbar-thumb-hover: rgba(0,0,0,0.25);
       color-scheme: light;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -262,7 +262,6 @@ function renderHTML(items, options = {}) {
       position: sticky;
       top: var(--nav-h);
       z-index: 100;
-      backdrop-filter: blur(20px);
     }
     .header-title { font-size: 22px; font-weight: 600; color: var(--header-text); }
     .header-meta { color: var(--header-meta); font-size: 13px; }
@@ -270,29 +269,31 @@ function renderHTML(items, options = {}) {
     .stat { background: var(--card-bg); padding: 6px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 6px; }
     .main { padding: 24px 32px; max-width: 1040px; margin: 0 auto; width: 100%; min-width: 0; }
     .ai-digest {
-      background: linear-gradient(135deg, rgba(0,120,212,0.15), rgba(96,205,255,0.08));
-      border: 1px solid rgba(0,120,212,0.3);
-      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--accent);
+      border-radius: 4px;
       padding: 24px;
       margin-bottom: 32px;
+      box-shadow: var(--shadow);
     }
     .error-banner {
       background: rgba(209,52,56,0.1);
       border: 1px solid rgba(209,52,56,0.4);
-      border-radius: 12px;
+      border-radius: 4px;
       padding: 16px 20px;
       margin-bottom: 24px;
     }
     .error-banner-head { font-size: 14px; font-weight: 600; color: #ff8a8a; margin-bottom: 8px; }
     .error-banner-list { margin: 0; padding-left: 20px; font-size: 13px; color: var(--text2); line-height: 1.7; }
     .error-banner-list strong { color: var(--text); }
-    .ai-digest h2 { font-size: 16px; margin-bottom: 16px; color: var(--accent2); display: flex; align-items: baseline; gap: 10px; }
+    .ai-digest h2 { font-size: 16px; margin-bottom: 16px; color: var(--accent); display: flex; align-items: baseline; gap: 10px; }
     .ai-ago { font-size: 12px; font-weight: 400; color: var(--text2); }
     .ai-content { font-size: 14px; line-height: 1.7; color: var(--text); }
-    .ai-content h1,.ai-content h2,.ai-content h3 { color: var(--accent2); margin: 16px 0 8px; }
+    .ai-content h1,.ai-content h2,.ai-content h3 { color: var(--accent); margin: 16px 0 8px; }
     .ai-content ul { padding-left: 20px; }
-    .ai-content a { color: var(--accent2); }
-    /* Severity triage badges (rendered from [CRITICAL]/[HIGH]/[MEDIUM]/[INFO] tags) */
+    .ai-content a { color: var(--accent); }
+    /* Severity triage badges (rendered from [CRITICAL]/[HIGH]/[MEDIUM]/[LOW]/[INFO] tags) */
     .sev {
       display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .4px;
       padding: 1px 7px; border-radius: 4px; margin-right: 6px; vertical-align: 1px;
@@ -303,7 +304,7 @@ function renderHTML(items, options = {}) {
     .sev-medium   { background: #b8860b; color: #fff; }
     .sev-low      { background: #2f8f5b; color: #fff; }
     .sev-info     { background: #36506e; color: #cfe3ff; }
-    .ai-spinner { width: 16px; height: 16px; flex: 0 0 auto; border: 2px solid var(--accent2); border-top-color: transparent; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
+    .ai-spinner { width: 16px; height: 16px; flex: 0 0 auto; border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: ai-spin 0.7s linear infinite; }
     @keyframes ai-spin { to { transform: rotate(360deg); } }
     .section-header {
       font-size: 12px;
@@ -316,25 +317,25 @@ function renderHTML(items, options = {}) {
     }
     .items-grid { display: flex; flex-direction: column; gap: 12px; }
     .item-card {
-      background: var(--card-bg);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 4px;
       padding: 16px;
       display: flex;
-      gap: 14px;
+      gap: 16px;
       transition: all 0.2s;
       text-decoration: none;
+      align-items: stretch;
     }
     .item-card:hover {
-      background: rgba(255,255,255,0.07);
-      border-color: rgba(0,120,212,0.4);
-      transform: translateY(-1px);
+      border-color: var(--accent);
+      transform: translateY(-2px);
       box-shadow: var(--shadow);
     }
     .item-thumb {
       width: 80px;
       height: 56px;
-      border-radius: 6px;
+      border-radius: 4px;
       object-fit: cover;
       flex-shrink: 0;
       background: var(--surface2);
@@ -342,13 +343,45 @@ function renderHTML(items, options = {}) {
     .item-thumb-placeholder {
       width: 80px;
       height: 56px;
-      border-radius: 6px;
+      border-radius: 4px;
       flex-shrink: 0;
       background: var(--surface2);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 22px;
+    }
+
+    /* Date Stack Component */
+    .date-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      border-right: 1px solid var(--border);
+      padding-right: 14px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .date-stack-month {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--accent);
+      letter-spacing: 0.8px;
+    }
+    .date-stack-day {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.1;
+      margin: 1px 0;
+    }
+    .date-stack-year {
+      font-size: 9px;
+      font-weight: 500;
+      color: var(--text2);
     }
     .item-body { flex: 1; min-width: 0; }
     .item-title {
@@ -647,17 +680,40 @@ function iocChipHTML(item) {
   return `<span class="ioc-chip" title="Extracted indicators of compromise">⚿ ${parts.join(' · ')}</span>`;
 }
 
+function parseDateForStack(dateStr) {
+  try {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return {
+      month: months[d.getMonth()] || 'N/A',
+      day: String(d.getDate()).padStart(2, '0'),
+      year: String(d.getFullYear())
+    };
+  } catch {
+    return { month: 'N/A', day: '--', year: '----' };
+  }
+}
+
 function renderItemHTML(item, readIdsSet = new Set(), prevIds = new Set()) {
   const color = SOURCE_COLORS[item.sourceType] || '#666';
   const tIcon = typeIcon(item.sourceType);
-  const dateStr = formatDate(item.publishedAt);
   const isRead = readIdsSet.has(item.id);
   const isNew = prevIds.size > 0 && !prevIds.has(item.id);
   const thumb = item.thumbnail
     ? `<img class="item-thumb" src="${escapeHTML(item.thumbnail)}" alt="" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="item-thumb-placeholder">${tIcon}</div>`;
 
+  const ds = parseDateForStack(item.publishedAt || item.fetchedAt);
+  const dateStackHTML = `
+    <div class="date-stack">
+      <div class="date-stack-month">${ds.month}</div>
+      <div class="date-stack-day">${ds.day}</div>
+      <div class="date-stack-year">${ds.year}</div>
+    </div>
+  `;
+
   return `<a class="item-card${isRead ? ' is-read' : ''}" href="${escapeHTML(item.url)}" target="_blank" rel="noopener" data-type="${escapeHTML(item.sourceType || 'rss')}" data-id="${escapeHTML(item.id || '')}" data-title="${escapeHTML((item.title || '').toLowerCase())}" data-desc="${escapeHTML((item.description || '').toLowerCase())}">
+    ${dateStackHTML}
     ${thumb}
     <div class="item-body">
       <div class="item-title">${escapeHTML(item.title)}${isNew ? '<span class="new-badge">New</span>' : ''}</div>
@@ -667,7 +723,6 @@ function renderItemHTML(item, readIdsSet = new Set(), prevIds = new Set()) {
         ${severityBadgeHTML(item)}
         ${iocChipHTML(item)}
         ${item.author ? `<span class="item-author">${escapeHTML(item.author)}</span>` : ''}
-        <span class="item-date">${dateStr}</span>
       </div>
     </div>
   </a>`;

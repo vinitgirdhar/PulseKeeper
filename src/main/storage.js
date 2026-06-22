@@ -45,6 +45,7 @@ const DEFAULT_SETTINGS = {
     generateDigest: true,
     digestPrompt: 'Summarize the following content items into a concise daily digest with key highlights and insights:',
     severityScoring: false,  // tag each highlight [CRITICAL]/[HIGH]/[MEDIUM]/[INFO]
+    aiAttribution: false,    // extract Threat Actors and MITRE ATT&CK techniques
     categoryDigests: false,  // group items by source category, one section + prompt each
     categories: [],          // [{ name, prompt }] — per-category digest framing
     knowledgeEnabled: false, // accumulate a running knowledge base across digests
@@ -67,9 +68,14 @@ const DEFAULT_SETTINGS = {
     enabled: true,
     port: 7828
   },
+  webhooks: {
+    enabled: false,
+    url: ''
+  },
   security: {
     iocExtraction: true,  // parse IPs/domains/hashes/CVEs from items + tag severity
-    defangIoCs: true      // normalize hxxp/[.] etc. before extracting (currently always on)
+    defangIoCs: true,      // normalize hxxp/[.] etc. before extracting (currently always on)
+    alertWords: ['zero-day', 'ransomware', 'exploit', 'apt']
   }
 };
 

@@ -230,6 +230,10 @@ function openAddSource() {
   document.getElementById('sourceCategory').value = '';
   populateCategoryDatalist();
   document.getElementById('sourceType').value = '';
+  const presetEl = document.getElementById('sourcePreset');
+  if (presetEl) presetEl.value = '';
+  const presetGroup = document.getElementById('presetGroup');
+  if (presetGroup) presetGroup.style.display = 'block';
   document.getElementById('sourceMaxItems').value = '20';
   document.getElementById('sourceRefreshInterval').value = '0';
   document.getElementById('sourceIgnoreMute').checked = false;
@@ -248,6 +252,8 @@ function openEditSource(id) {
   document.getElementById('sourceCategory').value = source.category || '';
   populateCategoryDatalist();
   document.getElementById('sourceType').value = source.type;
+  const presetGroup = document.getElementById('presetGroup');
+  if (presetGroup) presetGroup.style.display = 'none';
   document.getElementById('sourceMaxItems').value = source.maxItems || 20;
   document.getElementById('sourceRefreshInterval').value = source.refreshInterval || 0;
   document.getElementById('sourceIgnoreMute').checked = !!source.ignoreMute;
@@ -255,6 +261,62 @@ function openEditSource(id) {
   renderSourceFields(source.type, source.config || {});
   updateTypeHint(source.type);
   showModal();
+}
+
+function onPresetChange() {
+  const preset = document.getElementById('sourcePreset').value;
+  if (!preset) return;
+
+  const presets = {
+    'abusech-urlhaus': {
+      name: 'Abuse.ch URLhaus',
+      type: 'abusech',
+      category: 'Threat Intel',
+      config: { feed: 'urlhaus' }
+    },
+    'cisa-kev': {
+      name: 'CISA Known Exploited Vulns',
+      type: 'cisaKev',
+      category: 'Threat Intel',
+      config: {}
+    },
+    'sans-isc': {
+      name: 'SANS Internet Storm Center',
+      type: 'rss',
+      category: 'Threat Intel',
+      config: { url: 'https://isc.sans.edu/rssfeed_full.xml' }
+    },
+    'vxunderground': {
+      name: 'vx-underground Feed',
+      type: 'rss',
+      category: 'Threat Intel',
+      config: { url: 'https://vx-underground.org/feed.xml' }
+    },
+    'bleeping': {
+      name: 'BleepingComputer',
+      type: 'rss',
+      category: 'Threat Intel',
+      config: { url: 'https://www.bleepingcomputer.com/feed/' }
+    }
+  };
+
+  const p = presets[preset];
+  if (p) {
+    document.getElementById('sourceName').value = p.name;
+    document.getElementById('sourceType').value = p.type;
+    document.getElementById('sourceCategory').value = p.category;
+    onSourceTypeChange();
+    
+    setTimeout(() => {
+      for (const [key, value] of Object.entries(p.config)) {
+        const el = document.querySelector(`#sourceFields [data-field="${key}"]`);
+        if (el) {
+          if (el.type === 'checkbox') el.checked = !!value;
+          else el.value = value;
+        }
+      }
+    }, 50);
+  }
 }
 
 function onSourceTypeChange() {
@@ -404,6 +466,9 @@ async function loadSettings() {
   document.getElementById('settingMuteWords').value = (s.muteWords || []).join(', ');
   const iocEl = document.getElementById('settingIocExtraction');
   if (iocEl) iocEl.checked = s.security?.iocExtraction !== false;
+  document.getElementById('settingWebhookEnabled').checked = !!s.webhooks?.enabled;
+  document.getElementById('settingWebhookUrl').value = s.webhooks?.url || '';
+  document.getElementById('settingAlertWords').value = (s.security?.alertWords || []).join(', ');
 }
 
 // Show the hours field for interval mode, the time field for daily mode.
@@ -441,9 +506,14 @@ async function saveSettings() {
       enabled: document.getElementById('settingNotifyEnabled').checked,
       onRefresh: document.getElementById('settingNotifyOnRefresh').checked
     },
+    webhooks: {
+      enabled: document.getElementById('settingWebhookEnabled').checked,
+      url: document.getElementById('settingWebhookUrl').value.trim()
+    },
     security: {
       ...(current.security || {}),
-      iocExtraction: document.getElementById('settingIocExtraction')?.checked !== false
+      iocExtraction: document.getElementById('settingIocExtraction')?.checked !== false,
+      alertWords: document.getElementById('settingAlertWords').value.split(',').map(w => w.trim()).filter(Boolean)
     }
   });
   showToast('Settings saved');
@@ -490,6 +560,7 @@ async function loadLLMSettings() {
   document.getElementById('llmMaxItems').value = llm.maxItems || 50;
   document.getElementById('llmDigestPrompt').value = llm.digestPrompt || 'Summarize the following content items into a concise daily digest:';
   document.getElementById('llmSeverityScoring').checked = !!llm.severityScoring;
+  document.getElementById('llmAiAttribution').checked = !!llm.aiAttribution;
   document.getElementById('llmCategoryDigests').checked = !!llm.categoryDigests;
   renderCategoryRows(llm.categories || []);
   updateCategoriesVisibility();
@@ -601,6 +672,7 @@ function readLLMForm() {
     maxItems:     Number.isFinite(maxItems) && maxItems > 0 ? maxItems : 50,
     digestPrompt: document.getElementById('llmDigestPrompt').value.trim(),
     severityScoring: document.getElementById('llmSeverityScoring').checked,
+    aiAttribution: document.getElementById('llmAiAttribution').checked,
     categoryDigests: document.getElementById('llmCategoryDigests').checked,
     categories:   readCategoryRows(),
     knowledgeEnabled: document.getElementById('llmKnowledgeEnabled').checked,
@@ -1152,20 +1224,58 @@ function renderFeedItems() {
   list.innerHTML = items.map(renderFeedItem).join('');
 }
 
+function parseDateForStack(dateStr) {
+  try {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const months = ['JUN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return {
+      month: months[d.getMonth()] || 'N/A',
+      day: String(d.getDate()).padStart(2, '0'),
+      year: String(d.getFullYear())
+    };
+  } catch {
+    return { month: 'N/A', day: '--', year: '----' };
+  }
+}
+
 function renderFeedItem(item) {
   const color = FEED_COLORS[item.sourceType] || '#666';
   const isRead = feedReadIds.has(item.id);
   const thumb = item.thumbnail
     ? `<img class="feed-thumb" src="${escapeHTML(item.thumbnail)}" alt="" onerror="this.style.display='none'">`
     : `<div class="feed-icon">${getSourceIcon(item.sourceType)}</div>`;
+
+  const actors = item.iocs?.actors || [];
+  const mitres = item.iocs?.mitre || [];
+  let badges = '';
+  if (item.hasAlert) {
+    badges += `<span class="badge" style="background:rgba(209, 52, 56, 0.15);color:#d13438;border:1px solid rgba(209, 52, 56, 0.3);font-weight:700">⚠️ THREAT ALERT</span> `;
+  }
+  if (actors.length) {
+    badges += actors.map(a => `<span class="badge" style="background:rgba(2, 132, 199, 0.15);color:var(--accent);border:1px solid rgba(2, 132, 199, 0.3)">${escapeHTML(a)}</span>`).join(' ');
+  }
+  if (mitres.length) {
+    badges += mitres.map(m => `<span class="badge" style="background:rgba(232, 115, 12, 0.15);color:#e8730c;border:1px solid rgba(232, 115, 12, 0.3)">${escapeHTML(m)}</span>`).join(' ');
+  }
+
+  const ds = parseDateForStack(item.publishedAt || item.fetchedAt);
+  const dateStackHTML = `
+    <div class="date-stack">
+      <div class="date-stack-month">${ds.month}</div>
+      <div class="date-stack-day">${ds.day}</div>
+      <div class="date-stack-year">${ds.year}</div>
+    </div>
+  `;
+
   return `<div class="feed-item ${isRead ? 'read' : ''}" data-id="${escapeHTML(item.id)}" data-url="${escapeHTML(item.url || '')}">
+    ${dateStackHTML}
     ${thumb}
     <div class="feed-body">
       <div class="feed-title">${escapeHTML(item.title || '(no title)')}</div>
       ${item.description ? `<div class="feed-desc">${escapeHTML(item.description)}</div>` : ''}
       <div class="feed-meta">
         <span class="feed-source" style="background:${color}">${escapeHTML(item.sourceName || item.sourceType || '')}</span>
-        <span class="feed-date">${relativeTimeShort(item.publishedAt)}</span>
+        ${badges ? `<div style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center">${badges}</div>` : ''}
         ${isRead ? '' : '<span class="feed-unread-dot" title="Unread"></span>'}
       </div>
     </div>
@@ -1291,14 +1401,77 @@ function renderThreats() {
   const list = document.getElementById('threatList');
   if (!list) return;
   const rows = getFilteredThreats();
+
+  // Compute stats
+  let criticalCount = 0;
+  let highCount = 0;
+  let mediumCount = 0;
+  let infoCount = 0;
+  for (const r of threatRows) {
+    const sev = r.severity || 'info';
+    if (sev === 'critical') criticalCount++;
+    else if (sev === 'high') highCount++;
+    else if (sev === 'medium') mediumCount++;
+    else infoCount++;
+  }
+
+  const statsHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:12px;margin-bottom:20px;max-width:var(--content-max);margin-left:auto;margin-right:auto;width:100%">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;text-align:center;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;color:var(--text-disabled);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Critical Indicators</div>
+        <div style="font-size:24px;font-weight:700;color:#d13438">${criticalCount}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;text-align:center;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;color:var(--text-disabled);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">High Indicators</div>
+        <div style="font-size:24px;font-weight:700;color:#e8730c">${highCount}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;text-align:center;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;color:var(--text-disabled);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Medium Indicators</div>
+        <div style="font-size:24px;font-weight:700;color:#c8a000">${mediumCount}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;text-align:center;box-shadow:var(--shadow-sm)">
+        <div style="font-size:10px;color:var(--text-disabled);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Info Indicators</div>
+        <div style="font-size:24px;font-weight:700;color:#0078d4">${infoCount}</div>
+      </div>
+    </div>
+  `;
+
   if (!rows.length) {
     const msg = threatRows.length ? 'Nothing matches your filter or search.' : 'Add a threat-intel source (CISA KEV, Abuse.ch, CVE) and refresh to populate.';
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon" data-icon="threats" data-size="44"></div><h3>No indicators</h3><p>${msg}</p></div>`;
+    list.innerHTML = statsHTML + `<div class="empty-state"><div class="empty-icon" data-icon="threats" data-size="44"></div><h3>No indicators</h3><p>${msg}</p></div>`;
     if (window.PKIcons) window.PKIcons.hydrate(list);
     return;
   }
   const body = rows.map(r => {
     const sev = r.severity || 'info';
+    let lookups = '';
+    const val = r.value;
+    if (r.type === 'ip') {
+      lookups = `
+        <a class="ioc-link" href="#" data-url="https://www.virustotal.com/gui/ip-address/${encodeURIComponent(val)}" title="VirusTotal">VT</a>
+        <a class="ioc-link" href="#" data-url="https://otx.alienvault.com/indicator/ip/${encodeURIComponent(val)}" title="AlienVault OTX">OTX</a>
+        <a class="ioc-link" href="#" data-url="https://www.shodan.io/host/${encodeURIComponent(val)}" title="Shodan">SH</a>
+        <a class="ioc-link" href="#" data-url="https://www.abuseipdb.com/check/${encodeURIComponent(val)}" title="AbuseIPDB">IPDB</a>`;
+    } else if (r.type === 'domain') {
+      lookups = `
+        <a class="ioc-link" href="#" data-url="https://www.virustotal.com/gui/domain/${encodeURIComponent(val)}" title="VirusTotal">VT</a>
+        <a class="ioc-link" href="#" data-url="https://otx.alienvault.com/indicator/domain/${encodeURIComponent(val)}" title="AlienVault OTX">OTX</a>`;
+    } else if (r.type === 'url') {
+      lookups = `
+        <a class="ioc-link" href="#" data-url="https://www.virustotal.com/gui/search/${encodeURIComponent(val)}" title="VirusTotal">VT</a>
+        <a class="ioc-link" href="#" data-url="https://otx.alienvault.com/indicator/url/${encodeURIComponent(val)}" title="AlienVault OTX">OTX</a>`;
+    } else if (['md5', 'sha1', 'sha256'].includes(r.type)) {
+      lookups = `
+        <a class="ioc-link" href="#" data-url="https://www.virustotal.com/gui/file/${encodeURIComponent(val)}" title="VirusTotal">VT</a>
+        <a class="ioc-link" href="#" data-url="https://otx.alienvault.com/indicator/file/${encodeURIComponent(val)}" title="AlienVault OTX">OTX</a>`;
+    } else if (r.type === 'cve') {
+      lookups = `
+        <a class="ioc-link" href="#" data-url="https://cve.mitre.org/cgi-bin/cvename.cgi?name=${encodeURIComponent(val)}" title="MITRE CVE">MITRE</a>
+        <a class="ioc-link" href="#" data-url="https://nvd.nist.gov/vuln/detail/${encodeURIComponent(val)}" title="NVD Detail">NVD</a>`;
+    }
+
+    const defangedVal = defang(r.value);
+
     return `<tr>
       <td class="ioc-val" title="${escapeHTML(r.value)}">${escapeHTML(r.value)}</td>
       <td><span class="ioc-type-tag">${IOC_TYPE_LABELS[r.type] || r.type}</span></td>
@@ -1306,13 +1479,20 @@ function renderThreats() {
       <td class="ioc-src">${escapeHTML(r.source || '')}</td>
       <td class="ioc-date">${r.firstSeen ? relativeTimeShort(r.firstSeen) : ''}</td>
       <td class="ioc-count">${r.count}</td>
-      <td><button class="btn-copy-ioc" data-copy="${escapeHTML(r.value)}" title="Copy">⧉</button></td>
+      <td style="white-space:nowrap">
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-secondary btn-sm btn-icon btn-copy-ioc" data-copy="${escapeHTML(r.value)}" title="Copy Original">${icon('copy', 12)}</button>
+          <button class="btn btn-secondary btn-sm btn-icon btn-copy-defanged" data-copy="${escapeHTML(defangedVal)}" title="Copy Defanged">${icon('shield', 12)}</button>
+          <span class="ioc-lookups" style="display:flex;gap:4px;margin-left:6px">${lookups}</span>
+        </div>
+      </td>
     </tr>`;
   }).join('');
-  list.innerHTML = `<table class="ioc-table">
+  list.innerHTML = statsHTML + `<table class="ioc-table">
     <thead><tr><th>Indicator</th><th>Type</th><th>Severity</th><th>Source</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
     <tbody>${body}</tbody>
   </table>`;
+  if (window.PKIcons) window.PKIcons.hydrate(list);
 }
 
 async function exportThreats(format) {
@@ -1475,9 +1655,24 @@ function setupEventListeners() {
   });
   document.getElementById('threatList').addEventListener('click', async e => {
     const btn = e.target.closest('.btn-copy-ioc');
-    if (!btn) return;
-    try { await navigator.clipboard.writeText(btn.dataset.copy); showToast('Copied to clipboard'); }
-    catch { showToast('Copy failed', 'error'); }
+    if (btn) {
+      try { await navigator.clipboard.writeText(btn.dataset.copy); showToast('Copied to clipboard'); }
+      catch { showToast('Copy failed', 'error'); }
+      return;
+    }
+    const btnDefang = e.target.closest('.btn-copy-defanged');
+    if (btnDefang) {
+      try { await navigator.clipboard.writeText(btnDefang.dataset.copy); showToast('Copied defanged IoC'); }
+      catch { showToast('Copy failed', 'error'); }
+      return;
+    }
+    const link = e.target.closest('.ioc-link');
+    if (link) {
+      e.preventDefault();
+      const url = link.dataset.url;
+      if (url) api.ui.openExternal(url);
+      return;
+    }
   });
 
   // Source list — delegated click and change handlers
@@ -1548,6 +1743,13 @@ function showToast(msg, type = 'success') {
 
 function escapeHTML(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function defang(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\bhttp/gi, 'hxxp')
+    .replace(/\./g, '[.]');
 }
 
 function getSourceIcon(type) {

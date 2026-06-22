@@ -180,6 +180,9 @@ async function generateDigest(llmConfig, contentItems) {
   if (llmConfig.severityScoring) {
     systemPrompt += ' For every highlighted item, begin the line with a severity tag in square brackets — exactly one of [CRITICAL], [HIGH], [MEDIUM], or [INFO] — placed before the title. Judge severity by security/operational impact: [CRITICAL] = actively exploited vulnerabilities, zero-days, or major breaches; [HIGH] = important security issues or significant developments; [MEDIUM] = notable but non-urgent items; [INFO] = general news or context.';
   }
+  if (llmConfig.aiAttribution) {
+    systemPrompt += ' For each highlight, analyze the content and identify any Threat Actors / Groups (e.g. APT29, LockBit) and MITRE ATT&CK Techniques (e.g. T1566 Phishing) involved. List these clearly at the end of each item summary (e.g. "Actors: APT29 | Techniques: T1566").';
+  }
 
   // Running "model memory": fold in what the model learned from prior digests so
   // it builds on context (recurring actors, ongoing stories) and flags what's new.

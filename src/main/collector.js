@@ -91,6 +91,21 @@ class Collector {
         }
       }
 
+      // Check alert keywords
+      const alertWords = (settings.security?.alertWords || [])
+        .map(w => w.toLowerCase().trim())
+        .filter(Boolean);
+
+      if (alertWords.length) {
+        for (const item of items) {
+          const text = `${item.title || ''} ${item.description || ''} ${item.content || ''}`.toLowerCase();
+          if (alertWords.some(w => text.includes(w))) {
+            item.severity = 'critical';
+            item.hasAlert = true;
+          }
+        }
+      }
+
       const muteWords = (settings.muteWords || [])
         .map(w => w.toLowerCase().trim())
         .filter(Boolean);
@@ -106,6 +121,16 @@ class Collector {
       const existing = await this.storage.getContent(source.id);
       const existingIds = new Set(existing.map(i => i.id));
       const newItems = items.filter(i => !existingIds.has(i.id));
+
+      // Trigger Webhook for new high/critical items
+      if (settings.webhooks?.enabled && settings.webhooks?.url) {
+        const webhookUrl = settings.webhooks.url;
+        for (const item of newItems) {
+          if (item.severity === 'high' || item.severity === 'critical') {
+            this._sendWebhook(webhookUrl, item);
+          }
+        }
+      }
 
       // Merge new items at front, then apply retention window, then cap at maxItems * 3
       const retentionMs = (settings.retentionDays || 3) * 86400000;
@@ -137,6 +162,35 @@ class Collector {
 
   isRunning(sourceId) {
     return sourceId ? this._running.has(sourceId) : this._running.size > 0;
+  }
+
+  _sendWebhook(url, item) {
+    const payload = {
+      event: 'threat_indicator',
+      timestamp: new Date().toISOString(),
+      item: {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        url: item.url,
+        severity: item.severity,
+        hasAlert: !!item.hasAlert,
+        sourceName: item.sourceName,
+        sourceType: item.sourceType,
+        publishedAt: item.publishedAt,
+        iocs: item.iocs || {}
+      }
+    };
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    }).catch(err => {
+      console.error('Failed to send webhook:', err.message);
+    });
   }
 }
 

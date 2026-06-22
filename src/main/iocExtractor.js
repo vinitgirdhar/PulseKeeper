@@ -15,7 +15,10 @@ const RE = {
   cve:    /\bCVE-\d{4}-\d{4,7}\b/gi,
   email:  /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi,
   // Domain: label(s) + TLD; TLD validated against the allow-list below.
-  domain: /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/gi
+  domain: /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/gi,
+  yara:   /\brule\s+[a-zA-Z0-9_]+\s*\{[\s\S]*?condition:[\s\S]*?\}/gi,
+  mitre:  /\bT\d{4}(?:\.\d{3})?\b/gi,
+  actor:  /\b(?:APT\d+|APT\s\d+|Lazarus|LockBit|Cozy\s?Bear|Fancy\s?Bear|Sandworm|Volt\s?Typhoon|MuddyWater|Turla|Wizard\s?Spider|FIN\d+|TA\d+)\b/gi
 };
 
 // Common TLDs — guards the domain regex against matching version strings,
@@ -54,6 +57,14 @@ function refang(text) {
     .replace(/\[\s*at\s*\]/gi, '@');                // [at] → @
 }
 
+// Obfuscate IoCs to prevent accidental clicks
+function defang(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\bhttp/gi, 'hxxp')
+    .replace(/\./g, '[.]');
+}
+
 function uniq(arr) {
   return [...new Set(arr)];
 }
@@ -82,6 +93,14 @@ function extractIoCs(text) {
   const urls = uniq(matchAll(t, RE.url));
   const emails = uniq(matchAll(t, RE.email).map(e => e.toLowerCase()));
   const cves = uniq(matchAll(t, RE.cve).map(c => c.toUpperCase()));
+  const yara = uniq(matchAll(text, RE.yara)); // Extract YARA from original text to preserve formatting
+  const mitre = uniq(matchAll(t, RE.mitre).map(m => m.toUpperCase()));
+  const actors = uniq(matchAll(t, RE.actor).map(a => {
+    // Standardize to uppercase / consistent casing
+    const cleaned = a.trim();
+    if (/^apt\s?\d+/i.test(cleaned)) return cleaned.toUpperCase().replace(/\s+/g, '');
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }));
 
   const ips = uniq(matchAll(t, RE.ipv4)).filter(ip => !NOISE_IPS.has(ip));
 
@@ -94,7 +113,7 @@ function extractIoCs(text) {
       return TLDS.has(tld) && !NOISE_DOMAINS.has(d) && !emailDomains.has(d);
     });
 
-  return { ips, domains, urls, md5, sha1, sha256, cves, emails };
+  return { ips, domains, urls, md5, sha1, sha256, cves, emails, yara, mitre, actors };
 }
 
 function isEmpty(iocs) {
@@ -182,6 +201,7 @@ module.exports = {
   scoreSeverity,
   severityFromCvss,
   refang,
+  defang,
   isEmpty,
   totalCount,
   SEVERITY_RANK
