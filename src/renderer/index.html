@@ -33,6 +33,11 @@
         <span>Content</span>
         <span class="nav-badge" id="feedBadge">0</span>
       </div>
+      <div class="nav-item" data-tab="threats">
+        <span class="nav-icon" data-icon="threats"></span>
+        <span>Threats</span>
+        <span class="nav-badge" id="threatsBadge">0</span>
+      </div>
       <div class="nav-item" data-tab="settings">
         <span class="nav-icon" data-icon="settings"></span>
         <span>Settings</span>
@@ -110,6 +115,30 @@
       </div>
       <div class="feed-list" id="feedList">
         <div class="empty-state"><div class="empty-icon">📰</div><h3>Loading…</h3></div>
+      </div>
+    </div>
+
+    <!-- ── Threats / IoCs Tab ── -->
+    <div id="tab-threats" class="tab-content" style="display:none">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Threats &amp; Indicators</div>
+          <div class="page-subtitle">IoCs extracted from collected content — IPs, domains, URLs, file hashes, CVEs &amp; emails</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary" id="btnThreatsRefresh">🔄 Rescan</button>
+          <button class="btn btn-secondary" id="btnThreatsExportCsv">Export CSV</button>
+          <button class="btn btn-secondary" id="btnThreatsExportJson">Export JSON</button>
+          <button class="btn btn-secondary" id="btnThreatsExportStix">Export STIX</button>
+        </div>
+      </div>
+      <div class="feed-toolbar">
+        <input type="text" class="input feed-search" id="threatSearch" placeholder="Search indicator value or source…">
+        <div class="feed-filters" id="threatTypeFilters"></div>
+        <div class="feed-filters" id="threatSevFilters"></div>
+      </div>
+      <div class="ioc-table-wrap" id="threatList">
+        <div class="empty-state"><div class="empty-icon" data-icon="threats" data-size="44"></div><h3>No indicators yet</h3><p>Add a threat-intel source (CISA KEV, Abuse.ch, CVE) and refresh to populate.</p></div>
       </div>
     </div>
 
@@ -236,6 +265,15 @@
           <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
             <p style="font-size:12px">Items whose title or description contains any of these words will be hidden. Separate with commas.</p>
             <textarea class="textarea mute-textarea" id="settingMuteWords" placeholder="sponsored, advertisement, clickbait…"></textarea>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3><span data-icon="shield"></span> Security</h3></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div><div style="font-size:13px;font-weight:500">Extract indicators of compromise</div><div class="form-hint">Parse IPs, domains, URLs, file hashes &amp; CVEs from collected items and tag severity. Populates the Threats tab.</div></div>
+              <label class="toggle"><input type="checkbox" id="settingIocExtraction" checked><span class="toggle-slider"></span></label>
+            </div>
           </div>
         </div>
         <div class="card">

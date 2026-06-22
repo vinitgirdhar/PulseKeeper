@@ -34,6 +34,58 @@ async function getSourceErrors() {
     .map(s => ({ name: s.name, error: health[s.id].lastError }));
 }
 
+// ─── IoC export serializers (used by the Threats tab) ───────────────────────────
+// Each row: { value, type, severity, source, firstSeen, count }
+function iocsToCSV(rows) {
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['value', 'type', 'severity', 'source', 'firstSeen', 'count'];
+  const lines = [head.join(',')];
+  for (const r of rows) {
+    lines.push([r.value, r.type, r.severity, r.source, r.firstSeen, r.count].map(esc).join(','));
+  }
+  return lines.join('\r\n');
+}
+
+// Minimal STIX 2.1-style bundle of indicator SDOs (enough for import into TIPs).
+function iocsToStix(rows) {
+  const now = new Date().toISOString();
+  const patternFor = (type, value) => {
+    switch (type) {
+      case 'ip':     return `[ipv4-addr:value = '${value}']`;
+      case 'domain': return `[domain-name:value = '${value}']`;
+      case 'url':    return `[url:value = '${value}']`;
+      case 'md5':    return `[file:hashes.'MD5' = '${value}']`;
+      case 'sha1':   return `[file:hashes.'SHA-1' = '${value}']`;
+      case 'sha256': return `[file:hashes.'SHA-256' = '${value}']`;
+      case 'email':  return `[email-addr:value = '${value}']`;
+      default:       return `[x-pulsekeeper:value = '${String(value).replace(/'/g, "\\'")}']`;
+    }
+  };
+  const objects = rows.map((r, i) => ({
+    type: 'indicator',
+    spec_version: '2.1',
+    id: `indicator--${stixUuid(r.value + r.type + i)}`,
+    created: now,
+    modified: now,
+    name: `${r.type}: ${r.value}`,
+    pattern: patternFor(r.type, String(r.value).replace(/'/g, "\\'")),
+    pattern_type: 'stix',
+    valid_from: r.firstSeen || now,
+    labels: [r.severity || 'unknown'],
+    description: `Source: ${r.source || 'unknown'} · seen ${r.count || 1}×`
+  }));
+  return JSON.stringify({ type: 'bundle', id: `bundle--${stixUuid('bundle' + now)}`, objects }, null, 2);
+}
+
+// Deterministic v4-shaped UUID from a string (no dependency; good enough for STIX ids).
+function stixUuid(seed) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) { h = (h * 31 + seed.charCodeAt(i)) >>> 0; }
+  const hex = (n) => (h = (h * 1103515245 + 12345) >>> 0, n.toString(16).padStart(8, '0').slice(0, 4));
+  const r = () => Math.floor((h = (h * 1103515245 + 12345) >>> 0) / 65536).toString(16).padStart(4, '0').slice(0, 4);
+  return `${hex(h)}${r()}-${r()}-4${r().slice(1)}-8${r().slice(1)}-${r()}${r()}${r()}`;
+}
+
 // ─── App setup ────────────────────────────────────────────────────────────────
 app.setAppUserModelId('com.rodtrent.pulsekeeper');
 app.setName('PulseKeeper');
@@ -768,6 +820,27 @@ function setupIPC() {
   ipcMain.handle('output:exportPDF', async () => { const items = await storage.getAllContent(); await generatePDF(items); });
   ipcMain.handle('output:exportMarkdown', async () => { const items = await storage.getAllContent(); const md = renderMarkdown(items, { title: 'PulseKeeper Digest' }); const p = await storage.saveOutput('markdown', md); shell.openPath(p); return p; });
   ipcMain.handle('output:exportAgentPack', async (_, scriptOnly) => { const s = await storage.getSettings(); return exportPack(s, scriptOnly); });
+
+  // Export aggregated IoCs from the Threats tab. `rows` is computed in the
+  // renderer from already-exposed content; here we just serialize + save.
+  ipcMain.handle('threats:export', async (_, format, rows) => {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const ext = format === 'json' ? 'json' : format === 'stix' ? 'json' : 'csv';
+    const defaultName = `pulsekeeper-iocs-${new Date().toISOString().slice(0, 10)}.${ext}`;
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export IoCs',
+      defaultPath: path.join(storage.getOutputDir(), defaultName),
+      filters: [
+        format === 'csv' ? { name: 'CSV', extensions: ['csv'] } : { name: 'JSON', extensions: ['json'] }
+      ]
+    });
+    if (canceled || !filePath) return { canceled: true };
+    const data = format === 'csv' ? iocsToCSV(safeRows)
+      : format === 'stix' ? iocsToStix(safeRows)
+      : JSON.stringify(safeRows, null, 2);
+    fs.writeFileSync(filePath, data, 'utf8');
+    return { canceled: false, filePath, count: safeRows.length };
+  });
 
   // Manually (re)generate + cache the AI digest now. Returns a result object.
   ipcMain.handle('llm:generateDigest', () => generateAIDigestNow('manual'));

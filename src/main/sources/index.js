@@ -6,6 +6,9 @@ const { fetchReddit } = require('./reddit');
 const { fetchWebpage } = require('./webpage');
 const { fetchTelegram } = require('./telegram');
 const { fetchGitHub } = require('./github');
+const { fetchCVE } = require('./cve');
+const { fetchCisaKev } = require('./cisaKev');
+const { fetchAbusech } = require('./abusech');
 
 const SOURCE_TYPES = [
   {
@@ -157,6 +160,39 @@ const SOURCE_TYPES = [
     icon: 'capture',
     description: 'Items sent from the PulseKeeper browser extension',
     fields: []  // Managed automatically by the extension
+  },
+
+  // ── Security / Threat Intelligence (no API key required) ──
+  {
+    id: 'cve',
+    label: 'CVE Feed (NVD)',
+    icon: 'shield',
+    description: 'Recently published/modified CVEs from the National Vulnerability Database — no API key needed (public rate limits apply)',
+    fields: [
+      { key: 'keyword', label: 'Keyword Filter', type: 'text', placeholder: 'e.g. apache, windows, openssl', required: false,
+        hint: 'Optional. Leave blank for all recent CVEs.' },
+      { key: 'minCvss', label: 'Minimum Severity', type: 'select', options: ['', '4.0', '7.0', '9.0'], default: '7.0', required: false,
+        hint: '4.0 = Medium+, 7.0 = High+, 9.0 = Critical only. Blank = all.' },
+      { key: 'results', label: 'Max Results', type: 'text', placeholder: '20', required: false }
+    ]
+  },
+  {
+    id: 'cisaKev',
+    label: 'CISA Known Exploited Vulns (KEV)',
+    icon: 'shield',
+    description: 'CISA catalog of vulnerabilities confirmed exploited in the wild — every entry is critical. No API key.',
+    fields: []
+  },
+  {
+    id: 'abusech',
+    label: 'Abuse.ch Threat Feeds',
+    icon: 'shield',
+    description: 'IoC feeds from abuse.ch — malware URLs, botnet C2s, and tagged indicators. No API key.',
+    fields: [
+      { key: 'feed', label: 'Feed', type: 'select',
+        options: ['urlhaus', 'threatfox', 'feodo'], default: 'urlhaus', required: true,
+        hint: 'urlhaus = malware URLs · threatfox = tagged IOCs · feodo = botnet C2 IPs' }
+    ]
   }
 ];
 
@@ -180,6 +216,12 @@ async function fetchSource(source) {
       return fetchTelegram(source);
     case 'github':
       return fetchGitHub(source);
+    case 'cve':
+      return fetchCVE(source);
+    case 'cisaKev':
+      return fetchCisaKev(source);
+    case 'abusech':
+      return fetchAbusech(source);
     case 'web-capture':
       return []; // Items are inserted directly by the capture server
     default:

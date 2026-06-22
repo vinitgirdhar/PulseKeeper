@@ -26,6 +26,8 @@
     export:    '<path d="M12 15V4M12 4 8 8M12 4l4 4"/><path d="M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"/>',
     puzzle:    '<path d="M10 4.5h4a1 1 0 0 1 1 1V8a2 2 0 1 1 4 0v2.5a1 1 0 0 1-1 1h-2.5a2 2 0 1 0 0 4H18a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-4.5a2 2 0 1 0-4 0H5a1 1 0 0 1-1-1v-3.5a2 2 0 1 0 0-4V6a1.5 1.5 0 0 1 1.5-1.5z"/>',
     info:      '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r="0.9" fill="currentColor" stroke="none"/>',
+    shield:    '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
+    threats:   '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M12 8.5v4M12 15.2v.1"/>',
 
     // ── Actions ──
     plus:      '<path d="M12 5v14M5 12h14"/>',

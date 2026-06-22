@@ -1,6 +1,7 @@
 'use strict';
 
 const { fetchSource } = require('./sources/index');
+const { enrichItem } = require('./iocExtractor');
 
 class Collector {
   constructor(storage) {
@@ -81,6 +82,15 @@ class Collector {
 
       // Apply mute words filter
       const settings = await this.storage.getSettings();
+
+      // Security: extract IoCs + severity from each item (default on). Persisted
+      // on the item so the Threats tab and digest badges read it without re-parsing.
+      if (settings.security?.iocExtraction !== false) {
+        for (const item of items) {
+          try { enrichItem(item); } catch {}
+        }
+      }
+
       const muteWords = (settings.muteWords || [])
         .map(w => w.toLowerCase().trim())
         .filter(Boolean);

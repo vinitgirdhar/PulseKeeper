@@ -62,6 +62,11 @@ contextBridge.exposeInMainWorld('pcbAPI', {
     clearKnowledge:    () => ipcRenderer.invoke('llm:clearKnowledge')
   },
 
+  // Threats / IoCs
+  threats: {
+    export: (format, rows) => ipcRenderer.invoke('threats:export', format, rows)
+  },
+
   // UI
   ui: {
     openSettings:      (tab) => ipcRenderer.invoke('ui:openSettings', tab),

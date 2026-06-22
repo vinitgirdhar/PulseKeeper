@@ -66,6 +66,10 @@ const DEFAULT_SETTINGS = {
   captureServer: {
     enabled: true,
     port: 7828
+  },
+  security: {
+    iocExtraction: true,  // parse IPs/domains/hashes/CVEs from items + tag severity
+    defangIoCs: true      // normalize hxxp/[.] etc. before extracting (currently always on)
   }
 };
 
@@ -279,6 +283,85 @@ const DEFAULT_SOURCES = [
     config: { accessMethod: 'public', channelName: 'Combo445544' },
     maxItems: 20,
     icon: 'telegram'
+  },
+
+  // ── Threat Intelligence (IoC / CVE feeds, no API key) ──
+  {
+    id: uuidv4(),
+    name: 'CISA Known Exploited Vulns',
+    seedId: 'ti-cisa-kev',
+    type: 'cisaKev',
+    enabled: true,
+    category: 'Threat Intel',
+    config: {},
+    maxItems: 25,
+    icon: 'shield'
+  },
+  {
+    id: uuidv4(),
+    name: 'NVD CVEs (High & Critical)',
+    seedId: 'ti-nvd-cve',
+    type: 'cve',
+    enabled: false, // off by default — NVD is rate-limited; enable when needed
+    category: 'Threat Intel',
+    config: { minCvss: '7.0', results: '25' },
+    maxItems: 25,
+    icon: 'shield'
+  },
+  {
+    id: uuidv4(),
+    name: 'Abuse.ch URLhaus (Malware URLs)',
+    seedId: 'ti-abusech-urlhaus',
+    type: 'abusech',
+    enabled: true,
+    category: 'Threat Intel',
+    config: { feed: 'urlhaus' },
+    maxItems: 30,
+    icon: 'shield'
+  },
+  {
+    id: uuidv4(),
+    name: 'Abuse.ch Feodo (Botnet C2s)',
+    seedId: 'ti-abusech-feodo',
+    type: 'abusech',
+    enabled: false,
+    category: 'Threat Intel',
+    config: { feed: 'feodo' },
+    maxItems: 30,
+    icon: 'shield'
+  },
+  {
+    id: uuidv4(),
+    name: 'Exploit-DB',
+    seedId: 'ti-exploit-db',
+    type: 'rss',
+    enabled: false,
+    category: 'Threat Intel',
+    config: { url: 'https://www.exploit-db.com/rss.xml' },
+    maxItems: 15,
+    icon: 'shield'
+  },
+  {
+    id: uuidv4(),
+    name: 'Google Project Zero',
+    seedId: 'ti-project-zero',
+    type: 'blog',
+    enabled: true,
+    category: 'Threat Intel',
+    config: { url: 'https://googleprojectzero.blogspot.com/feeds/posts/default' },
+    maxItems: 10,
+    icon: 'shield'
+  },
+  {
+    id: uuidv4(),
+    name: 'SANS Internet Storm Center',
+    seedId: 'ti-sans-isc',
+    type: 'rss',
+    enabled: true,
+    category: 'Threat Intel',
+    config: { url: 'https://isc.sans.edu/rssfeed_full.xml' },
+    maxItems: 12,
+    icon: 'shield'
   }
 ];
 

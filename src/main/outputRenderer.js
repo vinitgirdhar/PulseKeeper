@@ -434,6 +434,19 @@ function renderHTML(items, options = {}) {
       background: #107c10; color: white; border-radius: 4px; padding: 1px 5px;
       vertical-align: middle; margin-left: 4px;
     }
+    .sev-badge {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+      color: white; border-radius: 4px; padding: 2px 6px;
+    }
+    .cvss-badge {
+      font-size: 10px; font-weight: 600; color: var(--text2);
+      border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+    }
+    .ioc-chip {
+      font-size: 10px; color: var(--text2);
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 6px;
+    }
     .footer {
       border-top: 1px solid var(--border);
       padding: 16px 32px;
@@ -600,6 +613,40 @@ function renderHTML(items, options = {}) {
 </html>`;
 }
 
+// Severity badge colors (work on both themes — bright fills, white text).
+const SEVERITY_COLORS = {
+  critical: '#d13438',
+  high:     '#e8730c',
+  medium:   '#c8a000',
+  info:     '#0078d4'
+};
+
+// Colored CRITICAL/HIGH/… pill, plus a CVSS chip when a numeric score exists.
+function severityBadgeHTML(item) {
+  let out = '';
+  if (item.severity && SEVERITY_COLORS[item.severity]) {
+    out += `<span class="sev-badge" style="background:${SEVERITY_COLORS[item.severity]}">${item.severity.toUpperCase()}</span>`;
+  }
+  if (item.cvss != null && Number.isFinite(Number(item.cvss))) {
+    out += `<span class="cvss-badge">CVSS ${Number(item.cvss).toFixed(1)}</span>`;
+  }
+  return out;
+}
+
+// Compact "3 IPs · 2 hashes" chip summarizing extracted IoCs on the item.
+function iocChipHTML(item) {
+  const i = item.iocs;
+  if (!i) return '';
+  const hashes = (i.md5?.length || 0) + (i.sha1?.length || 0) + (i.sha256?.length || 0);
+  const parts = [];
+  if (i.ips?.length) parts.push(`${i.ips.length} IP${i.ips.length > 1 ? 's' : ''}`);
+  if (i.domains?.length) parts.push(`${i.domains.length} domain${i.domains.length > 1 ? 's' : ''}`);
+  if (i.urls?.length) parts.push(`${i.urls.length} URL${i.urls.length > 1 ? 's' : ''}`);
+  if (hashes) parts.push(`${hashes} hash${hashes > 1 ? 'es' : ''}`);
+  if (!parts.length) return '';
+  return `<span class="ioc-chip" title="Extracted indicators of compromise">⚿ ${parts.join(' · ')}</span>`;
+}
+
 function renderItemHTML(item, readIdsSet = new Set(), prevIds = new Set()) {
   const color = SOURCE_COLORS[item.sourceType] || '#666';
   const tIcon = typeIcon(item.sourceType);
@@ -617,6 +664,8 @@ function renderItemHTML(item, readIdsSet = new Set(), prevIds = new Set()) {
       <div class="item-desc">${escapeHTML(item.description || '')}</div>
       <div class="item-meta">
         <span class="source-badge" style="background:${color}">${tIcon} ${escapeHTML(item.sourceName)}</span>
+        ${severityBadgeHTML(item)}
+        ${iocChipHTML(item)}
         ${item.author ? `<span class="item-author">${escapeHTML(item.author)}</span>` : ''}
         <span class="item-date">${dateStr}</span>
       </div>
@@ -651,14 +700,31 @@ function renderMarkdown(items, options = {}) {
     for (const item of typeItems) {
       md += `### [${item.title}](${item.url})\n`;
       md += `**Source:** ${item.sourceName}`;
+      if (item.severity) md += ` · **Severity:** ${item.severity.toUpperCase()}`;
+      if (item.cvss != null && Number.isFinite(Number(item.cvss))) md += ` · **CVSS:** ${Number(item.cvss).toFixed(1)}`;
       if (item.author) md += ` · **By:** ${item.author}`;
       md += ` · **Date:** ${formatDate(item.publishedAt)}\n\n`;
       if (item.description) md += `${item.description}\n\n`;
+      const iocLine = iocMarkdownLine(item.iocs);
+      if (iocLine) md += `${iocLine}\n\n`;
       md += `---\n\n`;
     }
   }
 
   return md;
+}
+
+// One-line IoC summary for Markdown digests (code-formatted values).
+function iocMarkdownLine(iocs) {
+  if (!iocs) return '';
+  const segs = [];
+  const fmt = (label, arr) => { if (arr?.length) segs.push(`${label}: ${arr.map(v => `\`${v}\``).join(', ')}`); };
+  fmt('IPs', iocs.ips);
+  fmt('Domains', iocs.domains);
+  fmt('URLs', iocs.urls);
+  fmt('Hashes', [...(iocs.md5 || []), ...(iocs.sha1 || []), ...(iocs.sha256 || [])]);
+  fmt('CVEs', iocs.cves);
+  return segs.length ? `**IoCs** — ${segs.join(' · ')}` : '';
 }
 
 function formatDate(dateStr) {

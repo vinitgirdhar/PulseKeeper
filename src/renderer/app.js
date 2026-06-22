@@ -80,6 +80,7 @@ function switchTab(tabId) {
   if (tabId === 'export') loadExportTab();
   if (tabId === 'health') loadHealthDashboard();
   if (tabId === 'feed') loadFeed();
+  if (tabId === 'threats') loadThreats();
 }
 
 // ─── Sources ──────────────────────────────────────────────────────────────────
@@ -401,6 +402,8 @@ async function loadSettings() {
   document.getElementById('settingNotifyEnabled').checked = s.notifications?.enabled !== false;
   document.getElementById('settingNotifyOnRefresh').checked = !!s.notifications?.onRefresh;
   document.getElementById('settingMuteWords').value = (s.muteWords || []).join(', ');
+  const iocEl = document.getElementById('settingIocExtraction');
+  if (iocEl) iocEl.checked = s.security?.iocExtraction !== false;
 }
 
 // Show the hours field for interval mode, the time field for daily mode.
@@ -437,6 +440,10 @@ async function saveSettings() {
     notifications: {
       enabled: document.getElementById('settingNotifyEnabled').checked,
       onRefresh: document.getElementById('settingNotifyOnRefresh').checked
+    },
+    security: {
+      ...(current.security || {}),
+      iocExtraction: document.getElementById('settingIocExtraction')?.checked !== false
     }
   });
   showToast('Settings saved');
@@ -1187,6 +1194,138 @@ async function feedMarkAllRead() {
   showToast('All items marked as read');
 }
 
+// ─── Threats / IoCs ──────────────────────────────────────────────────────────
+// Flattens persisted item.iocs across all content into a deduped indicator table.
+let threatRows = [];           // [{ value, type, severity, source, firstSeen, count }]
+let threatTypeFilter = 'all';
+let threatSevFilter = 'all';
+let threatSearch = '';
+
+const IOC_TYPE_LABELS = { ip: 'IP', domain: 'Domain', url: 'URL', md5: 'MD5', sha1: 'SHA1', sha256: 'SHA256', cve: 'CVE', email: 'Email' };
+const SEV_RANK = { critical: 3, high: 2, medium: 1, info: 0, '': -1 };
+
+async function loadThreats() {
+  const list = document.getElementById('threatList');
+  if (list) list.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  try {
+    const items = await api.content.getAll();
+    threatRows = aggregateIoCs(items);
+    renderThreatFilters();
+    renderThreats();
+    const badge = document.getElementById('threatsBadge');
+    if (badge) badge.textContent = threatRows.length;
+  } catch (e) {
+    if (list) list.innerHTML = `<div class="empty-state"><h3>Failed to load</h3><p>${escapeHTML(e.message)}</p></div>`;
+  }
+}
+
+// Collapse every item's .iocs into one row per unique (value,type), tracking the
+// highest severity seen, the source, the earliest sighting, and a hit count.
+function aggregateIoCs(items) {
+  const map = new Map();
+  for (const item of items) {
+    const iocs = item.iocs;
+    if (!iocs) continue;
+    const sev = item.severity || '';
+    const when = item.publishedAt || item.fetchedAt || '';
+    const src = item.sourceName || item.sourceType || '';
+    const addAll = (type, arr) => {
+      for (const value of (arr || [])) {
+        const key = `${type}:${value}`;
+        const existing = map.get(key);
+        if (existing) {
+          existing.count++;
+          if ((SEV_RANK[sev] ?? -1) > (SEV_RANK[existing.severity] ?? -1)) existing.severity = sev;
+          if (when && (!existing.firstSeen || when < existing.firstSeen)) existing.firstSeen = when;
+        } else {
+          map.set(key, { value, type, severity: sev, source: src, firstSeen: when, count: 1 });
+        }
+      }
+    };
+    addAll('ip', iocs.ips);
+    addAll('domain', iocs.domains);
+    addAll('url', iocs.urls);
+    addAll('md5', iocs.md5);
+    addAll('sha1', iocs.sha1);
+    addAll('sha256', iocs.sha256);
+    addAll('cve', iocs.cves);
+    addAll('email', iocs.emails);
+  }
+  // Sort by severity desc, then most-seen.
+  return [...map.values()].sort((a, b) =>
+    (SEV_RANK[b.severity] ?? -1) - (SEV_RANK[a.severity] ?? -1) || b.count - a.count);
+}
+
+function renderThreatFilters() {
+  const typeRow = document.getElementById('threatTypeFilters');
+  const sevRow = document.getElementById('threatSevFilters');
+  if (typeRow) {
+    const types = [...new Set(threatRows.map(r => r.type))];
+    const chips = [`<button class="feed-chip ${threatTypeFilter === 'all' ? 'active' : ''}" data-tfilter="all">All <span class="chip-count">${threatRows.length}</span></button>`];
+    for (const t of types) {
+      const n = threatRows.filter(r => r.type === t).length;
+      chips.push(`<button class="feed-chip ${threatTypeFilter === t ? 'active' : ''}" data-tfilter="${t}">${IOC_TYPE_LABELS[t] || t} <span class="chip-count">${n}</span></button>`);
+    }
+    typeRow.innerHTML = chips.join('');
+  }
+  if (sevRow) {
+    const sevs = ['all', 'critical', 'high', 'medium', 'info'];
+    sevRow.innerHTML = sevs.map(s =>
+      `<button class="feed-chip sev-chip-${s} ${threatSevFilter === s ? 'active' : ''}" data-sfilter="${s}">${s === 'all' ? 'Any severity' : s.charAt(0).toUpperCase() + s.slice(1)}</button>`
+    ).join('');
+  }
+}
+
+function getFilteredThreats() {
+  let f = threatRows;
+  if (threatTypeFilter !== 'all') f = f.filter(r => r.type === threatTypeFilter);
+  if (threatSevFilter !== 'all') f = f.filter(r => (r.severity || 'info') === threatSevFilter);
+  if (threatSearch) {
+    const q = threatSearch.toLowerCase();
+    f = f.filter(r => r.value.toLowerCase().includes(q) || (r.source || '').toLowerCase().includes(q));
+  }
+  return f;
+}
+
+function renderThreats() {
+  const list = document.getElementById('threatList');
+  if (!list) return;
+  const rows = getFilteredThreats();
+  if (!rows.length) {
+    const msg = threatRows.length ? 'Nothing matches your filter or search.' : 'Add a threat-intel source (CISA KEV, Abuse.ch, CVE) and refresh to populate.';
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon" data-icon="threats" data-size="44"></div><h3>No indicators</h3><p>${msg}</p></div>`;
+    if (window.PKIcons) window.PKIcons.hydrate(list);
+    return;
+  }
+  const body = rows.map(r => {
+    const sev = r.severity || 'info';
+    return `<tr>
+      <td class="ioc-val" title="${escapeHTML(r.value)}">${escapeHTML(r.value)}</td>
+      <td><span class="ioc-type-tag">${IOC_TYPE_LABELS[r.type] || r.type}</span></td>
+      <td><span class="sev-tag sev-${sev}">${sev.toUpperCase()}</span></td>
+      <td class="ioc-src">${escapeHTML(r.source || '')}</td>
+      <td class="ioc-date">${r.firstSeen ? relativeTimeShort(r.firstSeen) : ''}</td>
+      <td class="ioc-count">${r.count}</td>
+      <td><button class="btn-copy-ioc" data-copy="${escapeHTML(r.value)}" title="Copy">⧉</button></td>
+    </tr>`;
+  }).join('');
+  list.innerHTML = `<table class="ioc-table">
+    <thead><tr><th>Indicator</th><th>Type</th><th>Severity</th><th>Source</th><th>First seen</th><th>Hits</th><th></th></tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+
+async function exportThreats(format) {
+  const rows = getFilteredThreats();
+  if (!rows.length) { showToast('No indicators to export', 'error'); return; }
+  try {
+    const res = await api.threats.export(format, rows);
+    if (res && !res.canceled) showToast(`Exported ${res.count} indicators`);
+  } catch (e) {
+    showToast(`Export failed: ${e.message}`, 'error');
+  }
+}
+
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 function showModal() {
   const overlay = document.getElementById('addSourceModal');
@@ -1304,6 +1443,41 @@ function setupEventListeners() {
   document.getElementById('feedList').addEventListener('click', e => {
     const card = e.target.closest('.feed-item');
     if (card) openFeedItem(card.dataset.id, card.dataset.url);
+  });
+
+  // Threats / IoCs tab
+  document.getElementById('btnThreatsRefresh').addEventListener('click', async () => {
+    setStatus('Collecting all sources…', true);
+    try { await api.sources.collectAll(); await loadThreats(); }
+    catch (e) { showToast(e.message, 'error'); }
+    finally { setStatus('Ready', false); }
+  });
+  document.getElementById('btnThreatsExportCsv').addEventListener('click', () => exportThreats('csv'));
+  document.getElementById('btnThreatsExportJson').addEventListener('click', () => exportThreats('json'));
+  document.getElementById('btnThreatsExportStix').addEventListener('click', () => exportThreats('stix'));
+  document.getElementById('threatSearch').addEventListener('input', e => {
+    threatSearch = e.target.value.trim().toLowerCase();
+    renderThreats();
+  });
+  document.getElementById('threatTypeFilters').addEventListener('click', e => {
+    const chip = e.target.closest('[data-tfilter]');
+    if (!chip) return;
+    threatTypeFilter = chip.dataset.tfilter;
+    renderThreatFilters();
+    renderThreats();
+  });
+  document.getElementById('threatSevFilters').addEventListener('click', e => {
+    const chip = e.target.closest('[data-sfilter]');
+    if (!chip) return;
+    threatSevFilter = chip.dataset.sfilter;
+    renderThreatFilters();
+    renderThreats();
+  });
+  document.getElementById('threatList').addEventListener('click', async e => {
+    const btn = e.target.closest('.btn-copy-ioc');
+    if (!btn) return;
+    try { await navigator.clipboard.writeText(btn.dataset.copy); showToast('Copied to clipboard'); }
+    catch { showToast('Copy failed', 'error'); }
   });
 
   // Source list — delegated click and change handlers
