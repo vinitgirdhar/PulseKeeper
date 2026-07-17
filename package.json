@@ -29,10 +29,10 @@
   "dependencies": {
     "cheerio": "^1.0.0",
     "marked": "^12.0.0",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.2.1",
     "openai": "^4.77.0",
     "rss-parser": "^3.13.0",
-    "uuid": "^11.0.3"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "electron": "^41.1.1",
