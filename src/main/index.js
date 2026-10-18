@@ -13,11 +13,27 @@ const { Storage } = require('./storage');
 const { Collector } = require('./collector');
 const { Scheduler } = require('./scheduler');
 const { renderHTML, renderMarkdown } = require('./outputRenderer');
-const { generateDigest, getProviders } = require('./llmClient');
+const { generateDigest, summarizeItem, testConnection, listModels, getProviders, isConfigured: llmConfigured } = require('./llmClient');
 const { exportPack } = require('./agentExport');
 const { SOURCE_TYPES } = require('./sources/index');
 const { CaptureServer } = require('./server');
 const { discoverFeed } = require('./sources/rssDiscover');
+const { extractArticle } = require('./sources/article');
+const { httpUrl, parseOPML } = require('./util');
+
+// Enabled sources whose most recent fetch errored — surfaced as a digest banner.
+async function getSourceErrors() {
+  const [sources, health] = await Promise.all([storage.getSources(), storage.getSourceHealth()]);
+  return sources
+    .filter(s => s.enabled && health[s.id]?.lastError)
+    .map(s => ({ name: s.name, error: health[s.id].lastError }));
+}
+
+// Feed content is untrusted: only ever hand web links to the OS shell
+// (never file:, smb:, or custom-protocol URLs a hostile feed could smuggle in).
+function openExternalSafe(url) {
+  if (httpUrl(url) || /^mailto:/i.test(url || '')) return shell.openExternal(url);
+}
 
 // ─── App setup ────────────────────────────────────────────────────────────────
 app.setAppUserModelId('com.rodtrent.pulsekeeper');
@@ -29,6 +45,13 @@ app.setName('PulseKeeper');
 const APP_ICON_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'icon.ico')
   : path.join(__dirname, '../../assets/icon.ico');
+
+// Window chrome follows the app theme: the content paints behind a transparent
+// Windows title-bar overlay, so only the caption-button glyph colour changes.
+const chrome = theme => (theme === 'light'
+  ? { bg: '#ffffff', glyph: '#1d1d1f' }
+  : { bg: '#1c1c1e', glyph: '#f5f5f7' });
+const titleBarOverlay = theme => ({ color: '#00000000', symbolColor: chrome(theme).glyph, height: 52 });
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
@@ -44,6 +67,9 @@ let scheduler = null;
 let captureServer = null;
 let isCollecting = false;
 let unreadCount = 0;
+// Tracks an in-flight AI digest generation so the UI can show a spinner and we
+// never run two at once.
+let aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
 let lastViewedAt = new Date(0);
 let digestHomePath = null;
 
@@ -56,6 +82,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null); // the app lives in the tray and in its own UI — no File/Edit/View bar
   storage = new Storage();
   await storage.init();
 
@@ -80,6 +107,8 @@ app.whenReady().then(async () => {
           notify('PulseKeeper Updated', `${evt.succeeded} source${evt.succeeded !== 1 ? 's' : ''} refreshed.`, () => togglePopup());
         }
       });
+    } else if (evt.type === 'progress') {
+      broadcastToAll('collect:progress', { done: evt.done, total: evt.total, name: evt.source?.name });
     } else if (evt.type === 'sourceError') {
       broadcastToAll('collect:sourceError', { name: evt.source?.name, error: evt.error });
     }
@@ -124,14 +153,14 @@ function createTray() {
 
 function buildContextMenu() {
   return Menu.buildFromTemplate([
-    { label: '💓 PulseKeeper', enabled: false },
+    { label: 'PulseKeeper', enabled: false },
     { type: 'separator' },
-    { label: '📰 View Digest', click: () => openDigest() },
-    { label: '🔄 Refresh Now', click: () => { if (!isCollecting) collector.collectAll(); }, enabled: !isCollecting },
+    { label: 'View Digest', click: () => openDigest() },
+    { label: 'Refresh Now', click: () => { if (!isCollecting) collector.collectAll(); }, enabled: !isCollecting },
     { type: 'separator' },
-    { label: '⚙️  Settings', click: () => openSettings() },
-    { label: '📤 Export to AgentPlatform', click: () => exportToAgentPlatform() },
-    { label: '📂 Open Data Folder', click: () => shell.openPath(storage.getDataDir()) },
+    { label: 'Open PulseKeeper', click: () => openSettings() },
+    { label: 'Export to AgentPlatform', click: () => exportToAgentPlatform() },
+    { label: 'Open Data Folder', click: () => shell.openPath(storage.getDataDir()) },
     { type: 'separator' },
     { label: 'Quit PulseKeeper', click: () => app.exit(0) }
   ]);
@@ -219,20 +248,25 @@ function getPopupPosition() {
 }
 
 // ─── Settings window ──────────────────────────────────────────────────────────
-function openSettings(tab) {
+async function openSettings(tab) {
   if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.isMinimized() && settingsWin.restore();
     settingsWin.focus();
     if (tab) settingsWin.webContents.send('navigate', tab);
     return;
   }
+  const theme = (await storage.getSettings()).display?.theme || 'dark';
   settingsWin = new BrowserWindow({
-    width: 920,
-    height: 700,
-    minWidth: 740,
-    minHeight: 540,
+    width: 1240,
+    height: 800,
+    minWidth: 940,
+    minHeight: 600,
     title: 'PulseKeeper',
-    backgroundColor: '#1a1a2e',
+    show: false,                       // shown once painted, so there is no white flash
+    backgroundColor: chrome(theme).bg,
     icon: APP_ICON_PATH,
+    titleBarStyle: 'hidden',           // the app draws its own title area; Windows keeps its caption buttons
+    titleBarOverlay: titleBarOverlay(theme),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -240,7 +274,13 @@ function openSettings(tab) {
     }
   });
   settingsWin.loadFile(path.join(__dirname, '../../src/renderer/index.html'));
+  settingsWin.once('ready-to-show', () => settingsWin.show());
   settingsWin.on('closed', () => { settingsWin = null; });
+  if (!app.isPackaged) {
+    settingsWin.webContents.on('before-input-event', (e, input) => {
+      if (input.type === 'keyDown' && (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i'))) settingsWin.webContents.toggleDevTools();
+    });
+  }
   if (tab) settingsWin.webContents.once('did-finish-load', () => settingsWin.webContents.send('navigate', tab));
 }
 
@@ -255,25 +295,17 @@ async function openDigest() {
   const digestBrowser = settings.digestBrowser || 'internal';
 
   if (format === 'html') {
-    // Collect item IDs from the previous digest for diff highlighting
-    let previousItemIds = new Set();
-    try {
-      const history = await storage.getHistory();
-      const lastHtml = history.find(h => h.ext === 'html');
-      if (lastHtml && fs.existsSync(lastHtml.path)) {
-        const prevContent = fs.readFileSync(lastHtml.path, 'utf8');
-        for (const m of prevContent.matchAll(/data-id="([^"]+)"/g)) {
-          if (m[1]) previousItemIds.add(m[1]);
-        }
-      }
-    } catch {}
+    const previousItemIds = await getPreviousItemIds();
 
-    let aiDigest = null;
-    if (settings.llm?.enabled && settings.llm?.apiKey && items.length) {
-      try { aiDigest = await generateDigest(settings.llm, items); } catch {}
-    }
+    // Read the cached AI digest instead of regenerating on every open. If the
+    // LLM is configured but there's no cached summary yet, kick one off in the
+    // background and show a "generating…" placeholder.
+    const { aiDigest, aiError, aiPending, aiPendingModel, aiGeneratedAt } = await resolveAIDigestForView(settings, items);
+
     const digestFontSize = settings.display?.digestFontSize || 'medium';
-    const html = renderHTML(items, { title: 'PulseKeeper Digest', aiDigest, readIds, digestBrowser, previousItemIds, digestFontSize });
+    const theme = settings.display?.theme || 'dark';
+    const sourceErrors = await getSourceErrors();
+    const html = renderHTML(items, { title: 'PulseKeeper Digest', theme, aiDigest, aiError, aiPending, aiPendingModel, aiGeneratedAt, readIds, digestBrowser, previousItemIds, digestFontSize, sourceErrors });
     const outPath = await storage.saveOutput('html', html);
     digestHomePath = outPath;
 
@@ -286,7 +318,7 @@ async function openDigest() {
       width: 1200,
       height: 820,
       title: 'PulseKeeper — Digest',
-      backgroundColor: '#1a1a2e',
+      backgroundColor: chrome(settings.display?.theme || 'dark').bg,
       icon: APP_ICON_PATH,
       webPreferences: {
         preload: path.join(__dirname, 'digestPreload.js'),
@@ -322,6 +354,19 @@ async function openDigest() {
           url
         });
 
+        const isLight = (settings.display?.theme || 'dark') === 'light';
+        const barBg = isLight ? '#e8ecf0' : '#08081a';
+        const barBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(96,205,255,0.15)';
+        const btnBg = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)';
+        const btnBorder = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+        const btnColor = isLight ? '#1a1a2e' : '#ababab';
+        const closeBg = isLight ? 'rgba(0,120,212,0.08)' : 'rgba(0,120,212,0.15)';
+        const closeBorder = isLight ? 'rgba(0,120,212,0.25)' : 'rgba(0,120,212,0.35)';
+        const closeColor = isLight ? '#005a9e' : '#60cdff';
+        const urlBarBg = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)';
+        const urlBarBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+        const sepColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
+
         wc.executeJavaScript(`
 (function () {
   if (document.getElementById('__pk_nav__')) return; // already injected
@@ -330,25 +375,35 @@ async function openDigest() {
   bar.id = '__pk_nav__';
   bar.style.cssText = [
     'position:fixed','top:0','left:0','right:0','z-index:2147483647',
-    'height:40px','background:#08081a','border-bottom:1px solid rgba(96,205,255,0.15)',
+    'height:40px','background:${barBg}','border-bottom:1px solid ${barBorder}',
     'display:flex','align-items:center','gap:6px','padding:0 12px',
     'font-family:Segoe UI Variable,Segoe UI,system-ui,sans-serif',
     'font-size:13px','box-sizing:border-box'
   ].join(';');
 
   const btnStyle = [
-    'background:rgba(255,255,255,0.06)','border:1px solid rgba(255,255,255,0.1)',
-    'color:#ababab','border-radius:5px','padding:3px 9px','cursor:pointer',
+    'background:${btnBg}','border:1px solid ${btnBorder}',
+    'color:${btnColor}','border-radius:5px','padding:4px 9px','cursor:pointer',
     'font-size:14px','line-height:1','transition:all 0.15s','flex-shrink:0',
-    'font-family:inherit'
+    'font-family:inherit','display:inline-flex','align-items:center','justify-content:center'
   ].join(';');
 
   const closeStyle = [
-    'background:rgba(0,120,212,0.15)','border:1px solid rgba(0,120,212,0.35)',
-    'color:#60cdff','border-radius:5px','padding:3px 11px','cursor:pointer',
+    'background:${closeBg}','border:1px solid ${closeBorder}',
+    'color:${closeColor}','border-radius:5px','padding:3px 11px','cursor:pointer',
     'font-size:12px','line-height:1.4','transition:all 0.15s','flex-shrink:0',
-    'white-space:nowrap','font-family:inherit'
+    'white-space:nowrap','font-family:inherit','display:inline-flex','align-items:center','gap:5px'
   ].join(';');
+
+  // SF-style inline-SVG icons (matches the digest page + settings window).
+  const svg = (inner) => '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block">' + inner + '</svg>';
+  const ICN = {
+    back:    '<path d="M15 5l-7 7 7 7"/>',
+    forward: '<path d="M9 5l7 7-7 7"/>',
+    reload:  '<path d="M19 9a7 7 0 1 0 .8 5"/><path d="M19.5 4.5V9H15"/>',
+    external:'<path d="M14 4h6v6M20 4l-8 8"/><path d="M18 13v5.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H11"/>',
+    close:   '<path d="M6 6l12 12M18 6 6 18"/>'
+  };
 
   const mk = (tag, style, html, title) => {
     const el = document.createElement(tag);
@@ -358,19 +413,19 @@ async function openDigest() {
     return el;
   };
 
-  const btnBack     = mk('button', btnStyle, '&#8592;', 'Back');
-  const btnForward  = mk('button', btnStyle, '&#8594;', 'Forward');
-  const btnReload   = mk('button', btnStyle, '&#8635;', 'Reload');
-  const sep1        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
+  const btnBack     = mk('button', btnStyle, svg(ICN.back), 'Back');
+  const btnForward  = mk('button', btnStyle, svg(ICN.forward), 'Forward');
+  const btnReload   = mk('button', btnStyle, svg(ICN.reload), 'Reload');
+  const sep1        = mk('div', 'width:1px;height:18px;background:${sepColor};flex-shrink:0');
   const urlBar      = mk('div',
-    'flex:1;min-width:0;font-size:11px;color:#ababab;overflow:hidden;text-overflow:ellipsis;' +
-    'white-space:nowrap;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);' +
+    'flex:1;min-width:0;font-size:11px;color:${btnColor};overflow:hidden;text-overflow:ellipsis;' +
+    'white-space:nowrap;background:${urlBarBg};border:1px solid ${urlBarBorder};' +
     'border-radius:5px;padding:3px 10px');
   urlBar.textContent = location.href;
-  const sep2        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
-  const btnExternal = mk('button', btnStyle, '&#8599;', 'Open in system browser');
-  const sep3        = mk('div', 'width:1px;height:18px;background:rgba(255,255,255,0.08);flex-shrink:0');
-  const btnClose    = mk('button', closeStyle, '&#10005; Digest', 'Return to digest');
+  const sep2        = mk('div', 'width:1px;height:18px;background:${sepColor};flex-shrink:0');
+  const btnExternal = mk('button', btnStyle, svg(ICN.external), 'Open in system browser');
+  const sep3        = mk('div', 'width:1px;height:18px;background:${sepColor};flex-shrink:0');
+  const btnClose    = mk('button', closeStyle, svg(ICN.close) + ' Digest', 'Return to digest');
 
   [btnBack, btnForward, btnReload, sep1, urlBar, sep2, btnExternal, sep3, btnClose]
     .forEach(el => bar.appendChild(el));
@@ -419,7 +474,7 @@ async function openDigest() {
       if (digestBrowser === 'internal') {
         digestWin.webContents.loadURL(url);
       } else {
-        shell.openExternal(url);
+        openExternalSafe(url);
       }
       return { action: 'deny' };
     });
@@ -429,7 +484,7 @@ async function openDigest() {
       digestWin.webContents.on('will-navigate', (event, url) => {
         if (!url.startsWith('file://')) {
           event.preventDefault();
-          shell.openExternal(url);
+          openExternalSafe(url);
         }
       });
     }
@@ -444,40 +499,176 @@ async function openDigest() {
   }
 }
 
-// Auto-generate digest on schedule (no window opened — saves to history + notifies)
+// Collect item IDs from the previously saved HTML digest (for "new since last
+// digest" highlighting).
+async function getPreviousItemIds() {
+  const previousItemIds = new Set();
+  try {
+    const history = await storage.getHistory();
+    const lastHtml = history.find(h => h.ext === 'html');
+    if (lastHtml && fs.existsSync(lastHtml.path)) {
+      const prevContent = fs.readFileSync(lastHtml.path, 'utf8');
+      for (const m of prevContent.matchAll(/data-id="([^"]+)"/g)) {
+        if (m[1]) previousItemIds.add(m[1]);
+      }
+    }
+  } catch {}
+  return previousItemIds;
+}
+
+// Decide what AI summary to show when rendering a digest. Reads the cache; if
+// the LLM is configured but nothing is cached yet (and none is in flight), it
+// fires a background generation and reports a "pending" state.
+async function resolveAIDigestForView(settings, items) {
+  const cache = await storage.getAIDigest();
+  const aiDigest = cache?.markdown || null;
+  // Only surface a cached error if we have no good summary to show.
+  let aiError = (!aiDigest && cache?.error) ? cache.error : null;
+  let aiPending = false;
+  let aiPendingModel = null;
+
+  if (llmConfigured(settings.llm) && items.length) {
+    if (aiDigestState.inProgress) {
+      aiPending = true;
+      aiPendingModel = aiDigestState.model;
+    } else if (!aiDigest && !cache?.error) {
+      // Nothing cached yet — generate in the background (fire-and-forget).
+      aiPending = true;
+      aiPendingModel = settings.llm.model;
+      generateAIDigestNow('open').catch(() => {});
+    }
+  }
+  const aiGeneratedAt = aiDigest ? (cache?.generatedAt || null) : null;
+  return { aiDigest, aiError, aiPending, aiPendingModel, aiGeneratedAt };
+}
+
+function getDigestStatus() {
+  return {
+    inProgress: aiDigestState.inProgress,
+    provider: aiDigestState.provider,
+    model: aiDigestState.model,
+    startedAt: aiDigestState.startedAt
+  };
+}
+
+// Generate the AI digest now, cache it, and broadcast progress so any open
+// window can show a spinner. Guards against concurrent runs. Returns a result
+// object rather than throwing so callers (schedule/open/manual) stay simple.
+async function generateAIDigestNow(reason = 'manual') {
+  const settings = await storage.getSettings();
+  if (!llmConfigured(settings.llm)) return { ok: false, error: 'LLM not configured' };
+  if (aiDigestState.inProgress) return { ok: false, inProgress: true, error: 'A digest is already being generated.' };
+
+  const items = await storage.getAllContent();
+  if (!items.length) return { ok: false, error: 'No content collected yet.' };
+
+  const provider = settings.llm.provider;
+  const model = settings.llm.model;
+  aiDigestState = { inProgress: true, provider, model, startedAt: Date.now() };
+  broadcastToAll('digest:generating', { provider, model, reason, startedAt: aiDigestState.startedAt });
+
+  // Streamed token counts, throttled so a fast model doesn't flood IPC.
+  let lastProgress = 0;
+  const onProgress = chars => {
+    if (Date.now() - lastProgress < 400) return;
+    lastProgress = Date.now();
+    broadcastToAll('digest:progress', { chars, tokens: Math.round(chars / 3.5) });
+  };
+
+  try {
+    const { markdown, used, total } = await generateDigest(settings.llm, items, { onProgress });
+    await storage.saveAIDigest({ provider, model, markdown, itemCount: used, totalItems: total, error: null });
+    aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
+    broadcastToAll('digest:generated', { provider, model, generatedAt: new Date().toISOString(), itemCount: used, totalItems: total });
+    // Refresh an open digest window so it picks up the fresh summary.
+    if (digestWin && !digestWin.isDestroyed()) { openDigest().catch(() => {}); }
+    return { ok: true, markdown };
+  } catch (err) {
+    const msg = err.message || String(err);
+    console.error('[PulseKeeper] AI digest generation failed:', msg);
+    // Preserve the last good summary; just record the error alongside it.
+    const prev = await storage.getAIDigest();
+    await storage.saveAIDigest({
+      generatedAt: prev?.generatedAt || new Date().toISOString(),
+      provider, model,
+      markdown: prev?.markdown || null,
+      itemCount: prev?.itemCount ?? null,
+      totalItems: prev?.totalItems ?? null,
+      error: msg,
+      erroredAt: new Date().toISOString()
+    });
+    aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
+    broadcastToAll('digest:error', { provider, model, message: msg });
+    return { ok: false, error: msg };
+  }
+}
+
+// One story's AI summary: cached per story, one run per story at a time, streamed to the reader.
+// Resolves to { ok, markdown, model, … } or { ok: false, error } — never throws across IPC.
+const summaries = new Map();
+function summarizeStory(id, force = false) {
+  if (summaries.has(id)) return summaries.get(id);
+  const run = (async () => {
+    try {
+      const cached = await storage.getSummary(id);
+      if (cached && !force) return { ok: true, cached: true, ...cached };
+
+      const { llm } = await storage.getSettings();
+      if (!llmConfigured(llm)) return { ok: false, error: 'Turn on AI in AI & Models first.' };
+      const item = await storage.getItem(id);
+      if (!item) return { ok: false, error: 'That story is no longer available.' };
+
+      let last = 0;
+      const onProgress = (chars, text) => {
+        if (Date.now() - last < 150) return;
+        last = Date.now();
+        broadcastToAll('summary:progress', { id, text });
+      };
+      const article = await extractArticle(item.url).catch(() => ''); // best effort: the teaser is the fallback
+      const { markdown } = await summarizeItem(llm, item, article, { onProgress });
+      const record = { markdown, provider: llm.provider, model: llm.model, at: new Date().toISOString(), fullText: !!article };
+      await storage.saveSummary(id, record);
+      return { ok: true, ...record };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    } finally {
+      summaries.delete(id);
+    }
+  })();
+  summaries.set(id, run);
+  return run;
+}
+
+// Auto-generate digest on schedule (no window opened — saves output + notifies)
 async function autoGenerateDigest() {
   try {
-    const [items, settings, readIds] = await Promise.all([
+    // Generate + cache the AI summary first (spinner broadcasts handled inside).
+    await generateAIDigestNow('schedule');
+
+    const [items, settings, readIds, cache, previousItemIds] = await Promise.all([
       storage.getAllContent(),
       storage.getSettings(),
-      storage.getReadIds()
+      storage.getReadIds(),
+      storage.getAIDigest(),
+      getPreviousItemIds()
     ]);
-    let previousItemIds = new Set();
-    try {
-      const history = await storage.getHistory();
-      const lastHtml = history.find(h => h.ext === 'html');
-      if (lastHtml && fs.existsSync(lastHtml.path)) {
-        const prevContent = fs.readFileSync(lastHtml.path, 'utf8');
-        for (const m of prevContent.matchAll(/data-id="([^"]+)"/g)) {
-          if (m[1]) previousItemIds.add(m[1]);
-        }
-      }
-    } catch {}
-    let aiDigest = null;
-    if (settings.llm?.enabled && settings.llm?.apiKey && items.length) {
-      try { aiDigest = await generateDigest(settings.llm, items); } catch {}
-    }
+    const aiDigest = cache?.markdown || null;
+    const aiError = (!aiDigest && cache?.error) ? cache.error : null;
     const html = renderHTML(items, {
       title: 'PulseKeeper Digest',
+      theme: settings.display?.theme || 'dark',
       aiDigest,
+      aiError,
+      aiGeneratedAt: aiDigest ? (cache?.generatedAt || null) : null,
       readIds,
       digestBrowser: settings.digestBrowser || 'internal',
       previousItemIds,
-      digestFontSize: settings.display?.digestFontSize || 'medium'
+      digestFontSize: settings.display?.digestFontSize || 'medium',
+      sourceErrors: await getSourceErrors()
     });
     await storage.saveOutput('html', html);
     if (settings.notifications?.enabled !== false) {
-      notify('PulseKeeper — Daily Digest Ready', `${items.length} item${items.length !== 1 ? 's' : ''} collected. Click to open.`, () => openDigest());
+      notify('PulseKeeper — Digest Ready', `${items.length} item${items.length !== 1 ? 's' : ''} collected. Click to open.`, () => openDigest());
     }
   } catch (e) {
     console.error('[PulseKeeper] Auto-digest failed:', e.message);
@@ -485,7 +676,9 @@ async function autoGenerateDigest() {
 }
 
 async function generatePDF(items) {
-  const html = renderHTML(items, { title: 'PulseKeeper Digest' });
+  const settings = await storage.getSettings();
+  const theme = settings.display?.theme || 'dark';
+  const html = renderHTML(items, { title: 'PulseKeeper Digest', theme });
   const htmlPath = await storage.saveOutput('html', html);
   const win = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false } });
   await win.loadFile(htmlPath);
@@ -535,12 +728,20 @@ function setupIPC() {
 
   ipcMain.handle('content:getAll', () => storage.getAllContent());
   ipcMain.handle('content:getBySource', (_, id) => storage.getContent(id));
+  // News view: server-side filter/search/sort/page, plus the category → source tree with unread counts.
+  ipcMain.handle('content:query', (_, q) => storage.queryContent(q));
+  ipcMain.handle('content:channels', () => storage.getChannels());
 
   ipcMain.handle('settings:get', () => storage.getSettings());
   ipcMain.handle('settings:save', async (_, s) => {
     await storage.saveSettings(s);
     await scheduler.restart();
     applyStartupSetting(s.runAtStartup === true);
+    if (settingsWin && !settingsWin.isDestroyed()) {
+      const theme = s.display?.theme || 'dark';
+      settingsWin.setBackgroundColor(chrome(theme).bg);
+      try { settingsWin.setTitleBarOverlay(titleBarOverlay(theme)); } catch { /* not supported on this platform */ }
+    }
   });
   ipcMain.handle('settings:getProviders', () => getProviders());
 
@@ -549,11 +750,39 @@ function setupIPC() {
   ipcMain.handle('output:exportMarkdown', async () => { const items = await storage.getAllContent(); const md = renderMarkdown(items, { title: 'PulseKeeper Digest' }); const p = await storage.saveOutput('markdown', md); shell.openPath(p); return p; });
   ipcMain.handle('output:exportAgentPack', async (_, scriptOnly) => { const s = await storage.getSettings(); return exportPack(s, scriptOnly); });
 
-  ipcMain.handle('llm:generateDigest', async () => {
-    const s = await storage.getSettings();
-    if (!s.llm?.enabled || !s.llm?.apiKey) throw new Error('LLM not configured');
-    const items = await storage.getAllContent();
-    return generateDigest(s.llm, items);
+  // Manually (re)generate + cache the AI digest now. Returns a result object.
+  ipcMain.handle('llm:generateDigest', () => generateAIDigestNow('manual'));
+  ipcMain.handle('llm:generateDigestNow', () => generateAIDigestNow('manual'));
+
+  // Current generation state + last cached summary metadata, for the UI status.
+  ipcMain.handle('llm:getDigestStatus', async () => {
+    const cache = await storage.getAIDigest();
+    return {
+      ...getDigestStatus(),
+      cache: cache ? {
+        generatedAt: cache.generatedAt || null,
+        provider: cache.provider || null,
+        model: cache.model || null,
+        itemCount: cache.itemCount ?? null,
+        totalItems: cache.totalItems ?? null,
+        hasSummary: !!cache.markdown,
+        error: cache.error || null
+      } : null
+    };
+  });
+
+  // Connection test — uses the config passed from the form (or saved settings as
+  // a fallback) so the user can verify a key/model without enabling the LLM first.
+  ipcMain.handle('llm:test', async (_, llmConfig) => {
+    const cfg = llmConfig || (await storage.getSettings()).llm || {};
+    return testConnection(cfg);
+  });
+  ipcMain.handle('llm:getSummary', (_, id) => storage.getSummary(id));
+  ipcMain.handle('llm:summarize', (_, id, force) => summarizeStory(id, force));
+  // Models the provider really offers (installed models for Ollama).
+  ipcMain.handle('llm:listModels', async (_, llmConfig) => {
+    const cfg = llmConfig || (await storage.getSettings()).llm || {};
+    return listModels(cfg);
   });
 
   ipcMain.handle('ui:openSettings', (_, tab) => openSettings(tab));
@@ -561,18 +790,22 @@ function setupIPC() {
   ipcMain.handle('ui:openDataDir', () => shell.openPath(storage.getDataDir()));
   ipcMain.handle('ui:openOutputDir', () => shell.openPath(storage.getOutputDir()));
   ipcMain.handle('ui:openExtensionDir', () => shell.openPath(storage.getExtensionDir()));
-  ipcMain.handle('ui:openExternal', (_, url) => shell.openExternal(url));
+  ipcMain.handle('ui:openExternal', (_, url) => openExternalSafe(url));
   ipcMain.handle('ui:exportAgentPlatform', () => exportToAgentPlatform());
 
   ipcMain.handle('popup:close', () => { if (popupWin) popupWin.hide(); });
-  ipcMain.handle('popup:getLatest', async () => (await storage.getAllContent()).slice(0, 100));
+  ipcMain.handle('popup:getLatest', async () => (await storage.queryContent({ limit: 100 })).items);
 
   // Read tracking
   ipcMain.handle('content:getReadIds', async () => [...(await storage.getReadIds())]);
   ipcMain.handle('content:markRead', (_, ids) => storage.markRead(ids));
-  ipcMain.handle('content:markAllRead', async () => {
-    const items = await storage.getAllContent();
-    await storage.markAllRead(items.map(i => i.id));
+  ipcMain.handle('content:markUnread', (_, ids) => storage.markUnread(ids));
+  ipcMain.handle('content:setSaved', (_, id, saved) => storage.setSaved(id, saved));
+  // Optionally scoped to a view (same filter shape as content:query) — "mark everything in this feed read".
+  ipcMain.handle('content:markAllRead', async (_, filter) => {
+    const { items } = await storage.queryContent({ ...filter, unreadOnly: true });
+    await storage.markRead(items.map(i => i.id));
+    return items.length;
   });
 
   // Source health
@@ -590,7 +823,7 @@ function setupIPC() {
   ipcMain.handle('digestNav:forward',  () => { if (digestWin && !digestWin.isDestroyed()) digestWin.webContents.goForward(); });
   ipcMain.handle('digestNav:reload',   () => { if (digestWin && !digestWin.isDestroyed()) digestWin.webContents.reload(); });
   ipcMain.handle('digestNav:home',     () => { if (digestWin && !digestWin.isDestroyed() && digestHomePath) digestWin.loadFile(digestHomePath); });
-  ipcMain.handle('digestNav:openExternal', (_, url) => shell.openExternal(url));
+  ipcMain.handle('digestNav:openExternal', (_, url) => openExternalSafe(url));
 
   // Settings backup / restore
   ipcMain.handle('settings:exportBackup', async () => {
@@ -612,32 +845,19 @@ function setupIPC() {
       filters: [{ name: 'OPML Files', extensions: ['opml', 'xml'] }],
       properties: ['openFile']
     });
-    if (result.canceled || !result.filePaths.length) return { imported: 0 };
-    const raw = fs.readFileSync(result.filePaths[0], 'utf8');
-    // Parse <outline> elements with xmlUrl attributes
-    const outlines = [...raw.matchAll(/<outline[^>]+xmlUrl="([^"]+)"[^>]*(?:text|title)="([^"]+)"/gi)];
-    if (!outlines.length) {
-      // Also try title before xmlUrl ordering
-      const alt = [...raw.matchAll(/<outline[^>]*(?:text|title)="([^"]+)"[^>]+xmlUrl="([^"]+)"/gi)];
-      for (const m of alt) {
-        const name = m[1].trim() || 'Imported Feed';
-        const url  = m[2].trim();
-        if (url) await storage.addSource({ name, type: 'rss', config: { url }, maxItems: 20 });
-      }
-      const count = alt.length;
-      if (count) notify('OPML Imported', `${count} feed${count !== 1 ? 's' : ''} added.`);
-      broadcastToAll('sources:updated', {});
-      return { imported: count };
+    if (result.canceled || !result.filePaths.length) return { imported: 0, skipped: 0 };
+
+    const known = new Set((await storage.getSources()).map(s => s.config?.url).filter(Boolean));
+    let imported = 0, skipped = 0;
+    for (const feed of parseOPML(fs.readFileSync(result.filePaths[0], 'utf8'))) {
+      if (!httpUrl(feed.url) || known.has(feed.url)) { skipped++; continue; }
+      known.add(feed.url);
+      await storage.addSource({ name: feed.name, type: 'rss', category: feed.category, config: { url: feed.url } });
+      imported++;
     }
-    for (const m of outlines) {
-      const url  = m[1].trim();
-      const name = m[2].trim() || 'Imported Feed';
-      if (url) await storage.addSource({ name, type: 'rss', config: { url }, maxItems: 20 });
-    }
-    const count = outlines.length;
-    notify('OPML Imported', `${count} feed${count !== 1 ? 's' : ''} added.`);
+    if (imported) notify('OPML Imported', `${imported} feed${imported !== 1 ? 's' : ''} added.`);
     broadcastToAll('sources:updated', {});
-    return { imported: count };
+    return { imported, skipped };
   });
 
   ipcMain.handle('settings:importBackup', async () => {

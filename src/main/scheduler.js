@@ -2,17 +2,23 @@
 
 const cron = require('node-cron');
 
+// "Every N minutes" as a cron expression. Cron fields can't express a step
+// larger than their range, so >= 60 minutes becomes "every H hours at :00".
+function cronEvery(minutes) {
+  const m = Math.max(1, Math.round(minutes));
+  if (m < 60) return `*/${m} * * * *`;
+  const hours = Math.round(m / 60);
+  return hours >= 24 ? '0 0 * * *' : `0 */${hours} * * *`;
+}
+
 class Scheduler {
   constructor(storage, collector) {
     this.storage = storage;
     this.collector = collector;
-    this._task = null;
-    this._digestTask = null;
-    this._listeners = [];
+    this._tasks = [];
     this._digestListeners = [];
   }
 
-  onTick(fn)       { this._listeners.push(fn); }
   onDigestTick(fn) { this._digestListeners.push(fn); }
 
   async start() {
@@ -20,8 +26,8 @@ class Scheduler {
   }
 
   stop() {
-    if (this._task)       { this._task.stop();       this._task = null; }
-    if (this._digestTask) { this._digestTask.stop();  this._digestTask = null; }
+    this._tasks.forEach(t => t.stop());
+    this._tasks = [];
   }
 
   async restart() {
@@ -33,34 +39,29 @@ class Scheduler {
     const settings = await this.storage.getSettings();
 
     // ── Content collection task ────────────────────────────────────────────────
-    const intervalMinutes = Math.max(5, settings.refreshInterval || 30);
-    this._task = cron.schedule(`*/${intervalMinutes} * * * *`, async () => {
-      for (const fn of this._listeners) {
-        try { fn('tick'); } catch {}
-      }
-      await this.collector.collectAll();
-    }, { scheduled: true });
+    this._tasks.push(cron.schedule(cronEvery(Math.max(5, settings.refreshInterval || 30)), () => {
+      this.collector.collectAll().catch(() => {});
+    }));
 
-    // ── Daily auto-digest task ─────────────────────────────────────────────────
+    // ── Auto-digest task ───────────────────────────────────────────────────────
+    // Two modes: 'interval' runs every N hours (spreads the load for slow local
+    // models); 'daily' runs once at a fixed time. Default is interval.
     const ad = settings.autoDigest;
-    if (ad?.enabled && ad?.time) {
-      const parts = (ad.time || '08:00').split(':');
-      const hh = parseInt(parts[0], 10) || 8;
-      const mm = parseInt(parts[1], 10) || 0;
-      if (!isNaN(hh) && !isNaN(mm) && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
-        this._digestTask = cron.schedule(`${mm} ${hh} * * *`, () => {
-          for (const fn of this._digestListeners) {
-            try { fn(); } catch {}
-          }
-        }, { scheduled: true });
-      }
-    }
-  }
+    if (!ad?.enabled) return;
 
-  getNextRunMs() {
-    const now = new Date();
-    return new Date(Math.ceil(now.getTime() / 60000) * 60000).toISOString();
+    const fire = () => {
+      for (const fn of this._digestListeners) {
+        try { fn(); } catch {}
+      }
+    };
+    if ((ad.mode || 'interval') === 'interval') {
+      const hours = Math.min(24, Math.max(1, parseInt(ad.everyHours, 10) || 8));
+      this._tasks.push(cron.schedule(cronEvery(hours * 60), fire));
+    } else {
+      const [hh, mm] = String(ad.time || '08:00').split(':').map(n => parseInt(n, 10));
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) this._tasks.push(cron.schedule(`${mm} ${hh} * * *`, fire));
+    }
   }
 }
 
-module.exports = { Scheduler };
+module.exports = { Scheduler, cronEvery };
