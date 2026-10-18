@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const { app } = require('electron');
 const { v4: uuidv4 } = require('uuid');
+const { isConfigured } = require('./llmClient');
 
 // When packaged, scripts/ is placed as an extraResource outside the asar archive
 // so AgentPlatform can invoke it directly with `node`.
@@ -51,10 +52,10 @@ function buildAgentPack(settings) {
         name: 'PulseKeeper — AI Digest',
         description: 'Uses an LLM to generate a concise digest from the collected PulseKeeper content.',
         type: 'prompt',
-        enabled: !!(settings?.llm?.apiKey),
+        enabled: isConfigured({ ...settings?.llm, enabled: true }),
         schedule: buildCronExpr(settings?.refreshInterval || 30),
         provider: settings?.llm?.provider || 'anthropic',
-        model: settings?.llm?.model || 'claude-sonnet-4-6',
+        model: settings?.llm?.model || 'claude-sonnet-5-5',
         temperature: 0.5,
         systemPrompt: 'You are a personal content curator for PulseKeeper. Summarize content clearly with key highlights. Format in Markdown with sections per content type. Include links.',
         userPrompt: settings?.llm?.digestPrompt || 'Summarize the following content into a concise daily digest with key highlights and links:'

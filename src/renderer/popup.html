@@ -1,212 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src * data:; connect-src 'self' http://localhost:7828 http://127.0.0.1:7828">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; font-src 'self' data:; connect-src 'self' http://localhost:7828 http://127.0.0.1:7828">
   <title>PulseKeeper</title>
-  <style>
-    :root {
-      --bg: rgba(26, 26, 46, 0.95);
-      --surface: rgba(22, 33, 62, 0.96);
-      --surface-hover: rgba(255, 255, 255, 0.05);
-      --surface-active: rgba(0, 120, 212, 0.15);
-      --accent: #0078d4;
-      --accent-light: #60cdff;
-      --text: #f3f3f3;
-      --text2: #ababab;
-      --border: rgba(255, 255, 255, 0.08);
-      --border-focus: rgba(0, 120, 212, 0.6);
-      --font: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-      --scrollbar-thumb: rgba(255, 255, 255, 0.15);
-      --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
-      --header-bg: rgba(96, 205, 255, 0.06);
-      --btn-bg: rgba(255, 255, 255, 0.06);
-      --input-bg: rgba(255, 255, 255, 0.05);
-      --shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
-    }
-    body.theme-light {
-      --bg: rgba(243, 243, 243, 0.96);
-      --surface: rgba(255, 255, 255, 0.97);
-      --surface-hover: rgba(0, 0, 0, 0.04);
-      --surface-active: rgba(0, 120, 212, 0.1);
-      --accent: #0078d4;
-      --accent-light: #005a9e;
-      --text: #1a1a2e;
-      --text2: #444444;
-      --border: rgba(0, 0, 0, 0.1);
-      --border-focus: rgba(0, 120, 212, 0.5);
-      --scrollbar-thumb: rgba(0, 0, 0, 0.15);
-      --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
-      --header-bg: rgba(0, 120, 212, 0.08);
-      --btn-bg: rgba(0, 0, 0, 0.05);
-      --input-bg: rgba(0, 0, 0, 0.04);
-      --shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; font-family: var(--font); background: transparent; color: var(--text); font-size: 13px; -webkit-font-smoothing: antialiased; overflow: hidden; }
-    .popup {
-      width: 420px; height: 600px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      backdrop-filter: blur(40px) saturate(180%);
-      box-shadow: var(--shadow);
-    }
-    .popup-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--header-bg);
-      flex-shrink: 0;
-    }
-    .popup-title {
-      font-size: 14px; font-weight: 600; color: var(--accent-light);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .pk-logo { width: 18px; height: 18px; }
-    .popup-actions { display: flex; gap: 4px; align-items: center; }
-    .popup-btn {
-      padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: var(--font);
-      cursor: pointer; border: 1px solid var(--border); background: var(--btn-bg);
-      color: var(--text2); transition: all 0.15s;
-    }
-    .popup-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
-    .popup-btn:hover { background: var(--surface-hover); color: var(--text); }
-    .popup-btn.primary:hover { background: #006cbe; }
-    .pk-icon { display: inline-block; vertical-align: -0.14em; flex-shrink: 0; }
-    .popup-btn .pk-icon { width: 15px; height: 15px; vertical-align: middle; }
-    .popup-btn { display: inline-flex; align-items: center; gap: 4px; }
-    .item-icon .pk-icon { width: 18px; height: 18px; }
-    .filter-chip .pk-icon { width: 13px; height: 13px; }
-    .filter-row-wrap {
-      position: relative; flex-shrink: 0; border-bottom: 1px solid var(--border);
-    }
-    /* Fade indicators — appear when row is scrollable */
-    .filter-row-wrap::before, .filter-row-wrap::after {
-      content: ''; position: absolute; top: 0; bottom: 4px; width: 24px;
-      pointer-events: none; z-index: 1; transition: opacity 0.15s;
-    }
-    .filter-row-wrap::before {
-      left: 0;
-      background: linear-gradient(to right, var(--bg), transparent);
-      opacity: 0;
-    }
-    .filter-row-wrap::after {
-      right: 0;
-      background: linear-gradient(to left, var(--bg), transparent);
-    }
-    .filter-row-wrap.scroll-start::before { opacity: 1; }
-    .filter-row-wrap.scroll-end::after   { opacity: 0; }
-    .filter-row {
-      padding: 6px 12px; display: flex; gap: 4px;
-      overflow-x: auto; align-items: center; scroll-behavior: smooth;
-    }
-    /* Thin auto-hide scrollbars (invisible when idle, fade in while scrolling) */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb {
-      background: transparent; border: 2px solid transparent; border-radius: 8px;
-      background-clip: padding-box; transition: background 0.3s ease;
-    }
-    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
-    html.scrolling::-webkit-scrollbar-thumb,
-    html.scrolling *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); background-clip: padding-box; }
-    .filter-row::-webkit-scrollbar { height: 6px; }
-    .filter-chip {
-      padding: 3px 10px; border-radius: 12px; font-size: 11px;
-      border: 1px solid var(--border); background: transparent;
-      color: var(--text2); cursor: pointer; white-space: nowrap; transition: all 0.15s;
-      display: flex; align-items: center; gap: 4px;
-    }
-    .filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
-    .chip-unread {
-      background: #e8112388; color: white; border-radius: 8px;
-      padding: 0 5px; font-size: 10px; font-weight: 600; line-height: 16px;
-    }
-    .filter-chip.active .chip-unread { background: rgba(255,255,255,0.3); }
-    .items-list { flex: 1; overflow-y: auto; padding: 4px 0; }
-    .item { display: flex; gap: 10px; padding: 9px 14px; cursor: pointer; transition: background 0.12s; border-bottom: 1px solid var(--border); }
-    .item:hover { background: var(--surface-hover); }
-    .item.read { opacity: 0.45; }
-    .item.read:hover { opacity: 0.7; }
-    .item-thumb { width: 52px; height: 38px; border-radius: 5px; object-fit: cover; flex-shrink: 0; background: var(--surface-hover); }
-    .item-icon { width: 52px; height: 38px; border-radius: 5px; flex-shrink: 0; background: var(--surface-hover); display: flex; align-items: center; justify-content: center; font-size: 18px; }
-    .item-body { flex: 1; min-width: 0; }
-    .item-title { font-size: 12px; font-weight: 500; line-height: 1.4; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 4px; }
-    .item-meta { display: flex; gap: 6px; align-items: center; }
-    .item-source { font-size: 10px; padding: 1px 6px; border-radius: 8px; color: white; font-weight: 500; }
-    .item-date { font-size: 10px; color: var(--text2); }
-    .loading { display: flex; align-items: center; justify-content: center; height: 200px; flex-direction: column; gap: 12px; color: var(--text2); }
-    .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent-light); border-radius: 50%; animation: spin 0.7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .empty { display: flex; align-items: center; justify-content: center; height: 200px; flex-direction: column; gap: 8px; color: var(--text2); font-size: 12px; text-align: center; }
-    .popup-footer { padding: 7px 14px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text2); flex-shrink: 0; }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #107c10; display: inline-block; margin-right: 5px; }
-    .status-dot.collecting { background: var(--accent-light); animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .copy-toast { position: fixed; bottom: 44px; left: 50%; transform: translateX(-50%); background: rgba(16,124,16,0.9); color: white; padding: 4px 14px; border-radius: 20px; font-size: 11px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
-    .copy-toast.show { opacity: 1; }
-    #popupSearch {
-      width: 100%; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
-      padding: 4px 8px 4px 28px; color: var(--text); font-size: 11px; font-family: var(--font); outline: none; box-sizing: border-box;
-      transition: all 0.15s ease;
-    }
-    #popupSearch:focus {
-      border-color: var(--accent);
-      background-color: var(--surface);
-      box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
-    }
-    #popupSearch::placeholder {
-      color: var(--text2);
-      opacity: 0.7;
-    }
-  </style>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
 <div class="popup">
-  <div class="popup-header">
-    <div class="popup-title">
-      <svg class="pk-logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-        <rect width="64" height="64" rx="12" fill="#0b1d3a"/>
-        <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34"
-          fill="none" stroke="#60cdff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      PulseKeeper
+  <header class="popup-head drag">
+    <svg class="brand-mark" width="22" height="22" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="15" fill="#0b1d3a"/>
+      <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34" fill="none" stroke="#60cdff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>PulseKeeper</h1>
+    <div class="head-actions">
+      <button class="btn btn-icon btn-ghost btn-sm" id="btnCopy" title="Copy visible stories as Markdown" aria-label="Copy as Markdown"><span data-icon="copy"></span></button>
+      <button class="btn btn-icon btn-ghost btn-sm" id="btnMarkAllRead" title="Mark all as read" aria-label="Mark all as read"><span data-icon="checkall"></span></button>
+      <button class="btn btn-icon btn-ghost btn-sm" id="btnRefreshPopup" title="Refresh" aria-label="Refresh"><span data-icon="refresh"></span></button>
+      <button class="btn btn-icon btn-ghost btn-sm" id="btnSettings" title="Open PulseKeeper" aria-label="Open PulseKeeper"><span data-icon="news"></span></button>
+      <button class="btn btn-primary btn-sm" id="btnViewAll"><span data-icon="document"></span>Digest</button>
     </div>
-    <div class="popup-actions">
-      <button class="popup-btn" id="btnCopy" title="Copy visible items as Markdown" aria-label="Copy" data-icon="copy"></button>
-      <button class="popup-btn" id="btnMarkAllRead" title="Mark all as read"><span data-icon="check"></span> Read</button>
-      <button class="popup-btn" id="btnRefreshPopup" title="Refresh" aria-label="Refresh" data-icon="refresh"></button>
-      <button class="popup-btn" id="btnSettings" title="Settings" aria-label="Settings" data-icon="settings"></button>
-      <button class="popup-btn primary" id="btnViewAll">Digest</button>
-    </div>
-  </div>
-  <div class="filter-row-wrap" id="filterRowWrap">
-    <div class="filter-row" id="filterRow">
-      <button class="filter-chip active" data-type="all">All</button>
-    </div>
-  </div>
-  <div style="padding:5px 12px 0;flex-shrink:0">
-    <div style="position:relative">
-      <span data-icon="search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.55;display:flex"></span>
-      <input id="popupSearch" type="search" placeholder="Search…" autocomplete="off">
-    </div>
-  </div>
-  <div class="items-list" id="itemsList">
-    <div class="loading"><div class="spinner"></div><span>Loading…</span></div>
-  </div>
-  <div class="popup-footer">
-    <div><span class="status-dot" id="statusDot"></span><span id="statusText">Ready</span></div>
-    <span id="itemCount">0 items</span>
-  </div>
+  </header>
+
+  <div class="chips-wrap" id="chipsWrap"><div class="chips" id="chips" role="tablist" aria-label="Categories"></div></div>
+  <label class="search" for="popupSearch"><span data-icon="search"></span><input class="input" id="popupSearch" type="search" placeholder="Search" autocomplete="off"></label>
+
+  <div class="list" id="itemsList"></div>
+
+  <footer class="popup-foot">
+    <div class="status"><span class="dot ok" id="statusDot"></span><span id="statusText">Ready</span></div>
+    <span id="itemCount">0 stories</span>
+  </footer>
+  <div class="hud" id="hud" hidden></div>
 </div>
-<div class="copy-toast" id="copyToast">Copied to clipboard!</div>
+<script src="../../node_modules/gsap/dist/gsap.min.js"></script>
 <script src="icons.js"></script>
+<script src="motion.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

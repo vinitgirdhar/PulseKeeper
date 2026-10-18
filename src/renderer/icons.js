@@ -63,6 +63,27 @@
     blog:      '<path d="M16.5 4.5l3 3L9 18l-4 1 1-4z"/><path d="M13.5 7.5l3 3"/>',
     robot:     '<rect x="5" y="8" width="14" height="10" rx="2.5"/><path d="M12 4.5V8M9 13v1.5M15 13v1.5M3.5 12v3M20.5 12v3"/><circle cx="12" cy="4" r="1.2" fill="currentColor" stroke="none"/>',
 
+    // ── Reader / news ──
+    news:      '<path d="M4 6h12.5a1 1 0 0 1 1 1v10.5A1.5 1.5 0 0 1 16 19H6a2 2 0 0 1-2-2z"/><path d="M17.5 9H19a1 1 0 0 1 1 1v7a1.5 1.5 0 0 1-1.5 1.5M7 9.5h6.5M7 12.5h6.5M7 15.5h4"/>',
+    inbox:     '<path d="M4 13l2.2-7.1A1.5 1.5 0 0 1 7.6 5h8.8a1.5 1.5 0 0 1 1.4.9L20 13v4.5A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z"/><path d="M4 13h4.5l1 2h5l1-2H20"/>',
+    chevron:   '<path d="M9 5l7 7-7 7"/>',
+    chevrondown:'<path d="M5 9l7 7 7-7"/>',
+    up:        '<path d="M5 15l7-7 7 7"/>',
+    down:      '<path d="M5 9l7 7 7-7"/>',
+    external:  '<path d="M14 4h6v6M20 4l-8 8"/><path d="M18 13v5.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H11"/>',
+    link:      '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    eye:       '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    eyeoff:    '<path d="M4 4l16 16M9.9 6A9 9 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.6 3.3M6.5 7.6A15 15 0 0 0 2.5 12S6 18.5 12 18.5a8.7 8.7 0 0 0 3.3-.7"/><path d="M9.8 9.9a2.8 2.8 0 0 0 4 4"/>',
+    checkall:  '<path d="M2.5 12.5l4 4L14 8M10.5 15.5l1 1L20 8"/>',
+    circleok:  '<circle cx="12" cy="12" r="8.5"/><path d="M8 12.4l2.7 2.7L16 9.8"/>',
+    more:      '<circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+    sort:      '<path d="M7 5v14M7 19l-3-3M7 19l3-3M17 19V5M17 5l-3 3M17 5l3 3"/>',
+    key:       '<circle cx="8" cy="15" r="3.5"/><path d="M10.5 12.5L19 4M16 7l2.5 2.5M14 9l2 2"/>',
+    cpu:       '<rect x="6.5" y="6.5" width="11" height="11" rx="2"/><rect x="10" y="10" width="4" height="4" rx="0.8"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/>',
+    cloud:     '<path d="M7.5 18.5a4.5 4.5 0 0 1-.7-8.95 5.5 5.5 0 0 1 10.6 1.45A3.8 3.8 0 0 1 17 18.5z"/>',
+    palette:   '<path d="M12 4a8 8 0 1 0 0 16c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.8-.4-1.2-.3-.4-.4-.7-.4-1.1 0-.9.8-1.5 1.7-1.5H17a3 3 0 0 0 3-3C20 7 16.4 4 12 4z"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="11" cy="7.8" r="1" fill="currentColor" stroke="none"/><circle cx="15.2" cy="8.6" r="1" fill="currentColor" stroke="none"/>',
+    sliders:   '<path d="M5 8h9M18 8h1M5 16h1M10 16h9"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>',
+
     // ── Status ──
     warning:   '<path d="M12 4.5 21 19.5H3z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r="0.95" fill="currentColor" stroke="none"/>',
     circle:    '<circle cx="12" cy="12" r="7.5"/>',
@@ -80,6 +101,8 @@
     backup: 'save',
     opml: 'import',
     theme: 'moon',
+    all: 'news',
+    unread: 'circle',
   };
 
   function resolve(name) {
@@ -93,7 +116,7 @@
     const inner = key ? PATHS[key] : '<circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>';
     const dim = size ? `width="${size}" height="${size}"` : 'width="1em" height="1em"';
     return `<svg class="pk-icon" ${dim} viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
-           `stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ` +
+           `stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ` +
            `focusable="false">${inner}</svg>`;
   }
 

@@ -27,16 +27,18 @@ PulseKeeper is a Windows 11 system tray app built with Electron and Node.js. It 
 - **RSS auto-discovery** — paste any website URL and PulseKeeper will find the feed
 - **Mute words** — filter out items containing specific words across all sources
 - **Per-source refresh intervals** — override the global schedule for individual sources
-- **Digest history** — last 10 generated digests saved and accessible from the Export tab
+- **Smart collection** — conditional GET (ETag / Last-Modified), parallel fetching, retry with backoff, failing sources are retried less often, duplicate stories across sources are merged
+- **Digest history** — generated digests saved and accessible from the Export tab
 - **Backup & restore** — export/import all sources and settings as a JSON file
-- **Light / dark theme** — toggle in the settings sidebar
+- **Light / dark / auto theme** with Apple-style accent colours — Settings → Appearance
 - **CSS selector scraping** — target specific sections of any web page with optional change monitoring
 - **Browser extension** — Chrome/Edge Manifest V3 extension to capture pages, selections, and links directly to PulseKeeper; extension files automatically copied to your data folder on startup
 - **Clipboard export** — copy visible items as formatted Markdown with one click
 - **AI digest generation** — connects to Anthropic, OpenAI, xAI (Grok), Ollama, or any OpenAI-compatible endpoint
 - **AgentPlatform export** — export a ready-to-import agent pack JSON for use with [AgentPlatform](https://github.com/rod-trent/AgentPlatform)
 - **Output formats** — generate digests as styled HTML, Markdown, or PDF
-- **Fluent Design UI** — dark navy/cyan Windows 11 aesthetic throughout
+- **News aggregator** — one sidebar of categories and sources with live unread counts; pick "All Stories", a category, or a single source, then search, filter unread, sort, and read in a side panel (`J`/`K` to step, `M` to toggle read, `/` to search)
+- **Apple-style UI** — clean light/dark design, Inter typeface, spring animations (GSAP), reduced-motion aware
 - **Auto-refresh** — configurable cron schedule keeps sources up to date in the background
 
 ---
@@ -161,19 +163,19 @@ The tray popup provides a quick view of your latest content:
 - Max items per source default
 
 ### Source Health
-Each source card in the **Content Sources** tab shows:
+Each row in **Sources** (and the **Health** page) shows:
 - Last successful fetch time
 - Error message if the last fetch failed
 - Per-source refresh interval override
 
 ### Mute Words
-Enter words or phrases (one per line) in the **Mute Words** field under Settings. Any content item whose title or description contains a muted word is silently dropped across all sources.
+Enter comma-separated words under **Settings → Muted words**. Stories whose title or summary contain a muted word are hidden everywhere — including ones already collected (muting is applied when reading, so un-muting brings them back).
 
 ### Theme
-Click the theme toggle button (☀️ / 🌙) in the settings sidebar to switch between dark (default) and light mode.
+Choose Auto / Light / Dark and an accent colour under **Settings → Appearance** (or use the sun/moon button at the bottom of the sidebar).
 
 ### Backup & Restore
-Under **Settings → Backup & Restore**:
+Under **Settings → Backup**:
 - **Export Backup** — saves all sources, settings, and configuration as a single JSON file
 - **Import Backup** — restores from a previously exported backup
 
@@ -221,15 +223,18 @@ node scripts/pk-bridge.js --format markdown --max 40
 
 ## AI / LLM Configuration
 
-Open the **AI / LLM** tab in settings. Supported providers:
+Open **AI & Models** in the sidebar. Supported providers:
 
 | Provider | Notes |
 |---|---|
 | **Anthropic** | Claude models — requires API key |
 | **OpenAI** | GPT models — requires API key |
 | **xAI** | Grok models — requires API key |
-| **Ollama** | Local models, no API key — set base URL to `http://localhost:11434/v1` |
-| **Custom** | Any OpenAI-compatible endpoint |
+| **Google (Gemini)**, **Groq** | Requires API key |
+| **Ollama** | Local models, no API key. Leave the server address empty for this computer, or point at another machine. Use the refresh button to list installed models. |
+| **Custom** | Any OpenAI-compatible endpoint (LM Studio, vLLM, LiteLLM…) |
+
+Keys are remembered per provider. Digests stream from the model; for local models PulseKeeper sets the context window (default 8192 tokens) and trims the digest to fit, so nothing is silently cut off.
 
 ---
 
@@ -268,7 +273,9 @@ PulseKeeper/
 │   │   ├── index.js          # Main process, tray, IPC, badge
 │   │   ├── preload.js        # contextBridge API
 │   │   ├── storage.js        # File-based persistence
-│   │   ├── collector.js      # Source fetch orchestration, mute words
+│   │   ├── collector.js      # Parallel fetch, merge/retention, backoff, conditional GET
+│   │   ├── http.js           # Shared fetch helper (timeout, retry, ETag)
+│   │   ├── util.js           # HTML→text, dates, URL canonicalisation, OPML
 │   │   ├── scheduler.js      # node-cron refresh
 │   │   ├── server.js         # Local HTTP capture server (port 7828)
 │   │   ├── outputRenderer.js # HTML / Markdown / PDF generation
@@ -278,16 +285,18 @@ PulseKeeper/
 │   │       ├── index.js      # Source type registry & dispatcher
 │   │       ├── rss.js        # RSS / Atom / Podcast feeds
 │   │       ├── youtube.js    # YouTube (innertube API + RSS)
-│   │       ├── twitter.js    # X / Twitter API v2
 │   │       ├── reddit.js     # Reddit RSS feed
 │   │       ├── webpage.js    # Web page scraping (Cheerio)
 │   │       └── rssDiscover.js # RSS auto-discovery
 │   └── renderer/
-│       ├── index.html        # Settings window
+│       ├── index.html        # Main window
 │       ├── popup.html        # Tray popup
-│       ├── app.js            # Settings window logic
-│       ├── popup.js          # Popup logic
-│       └── styles.css        # Fluent Design theme (dark + light)
+│       ├── theme.css         # Design tokens + shared controls (light/dark/accent)
+│       ├── styles.css        # Main window layout and views
+│       ├── motion.js         # GSAP animation helpers
+│       ├── news.js           # News aggregator (channels, list, reader)
+│       ├── app.js            # Sources, health, AI, settings
+│       └── popup.js          # Popup logic
 ├── extension/                # Chrome/Edge MV3 extension (source)
 │   ├── manifest.json
 │   ├── background.js

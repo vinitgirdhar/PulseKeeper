@@ -95,23 +95,26 @@ const SOURCE_TYPES = [
 ];
 
 /**
- * Fetch items from a single source based on its type
+ * Fetch items from a single source based on its type.
+ * @param {object} source
+ * @param {object} [state] conditional-GET validators saved from the previous fetch
+ * @returns {Promise<{ items?: object[], state?: object, notModified?: boolean }>}
  */
-async function fetchSource(source) {
+async function fetchSource(source, state = {}) {
   switch (source.type) {
     case 'rss':
     case 'podcast':
     case 'newsletter':
     case 'blog':
-      return fetchRSS(source);
+      return fetchRSS(source, state);
     case 'youtube':
-      return fetchYouTube(source);
+      return fetchYouTube(source, state);
     case 'reddit':
-      return fetchReddit(source);
+      return fetchReddit(source, state);
     case 'webpage':
       return fetchWebpage(source);
     case 'web-capture':
-      return []; // Items are inserted directly by the capture server
+      return { items: [] }; // Items are inserted directly by the capture server
     default:
       throw new Error(`Unknown source type: ${source.type}`);
   }

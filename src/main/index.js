@@ -13,18 +13,12 @@ const { Storage } = require('./storage');
 const { Collector } = require('./collector');
 const { Scheduler } = require('./scheduler');
 const { renderHTML, renderMarkdown } = require('./outputRenderer');
-const { generateDigest, testConnection, getProviders } = require('./llmClient');
+const { generateDigest, testConnection, listModels, getProviders, isConfigured: llmConfigured } = require('./llmClient');
 const { exportPack } = require('./agentExport');
 const { SOURCE_TYPES } = require('./sources/index');
 const { CaptureServer } = require('./server');
 const { discoverFeed } = require('./sources/rssDiscover');
-
-// Cloud providers need an API key; local ones (Ollama, custom endpoint) don't.
-function llmConfigured(llm) {
-  if (!llm?.enabled) return false;
-  const localProvider = llm.provider === 'ollama' || llm.provider === 'custom';
-  return localProvider || !!llm.apiKey;
-}
+const { httpUrl, parseOPML } = require('./util');
 
 // Enabled sources whose most recent fetch errored — surfaced as a digest banner.
 async function getSourceErrors() {
@@ -32,6 +26,12 @@ async function getSourceErrors() {
   return sources
     .filter(s => s.enabled && health[s.id]?.lastError)
     .map(s => ({ name: s.name, error: health[s.id].lastError }));
+}
+
+// Feed content is untrusted: only ever hand web links to the OS shell
+// (never file:, smb:, or custom-protocol URLs a hostile feed could smuggle in).
+function openExternalSafe(url) {
+  if (httpUrl(url) || /^mailto:/i.test(url || '')) return shell.openExternal(url);
 }
 
 // ─── App setup ────────────────────────────────────────────────────────────────
@@ -44,6 +44,13 @@ app.setName('PulseKeeper');
 const APP_ICON_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'icon.ico')
   : path.join(__dirname, '../../assets/icon.ico');
+
+// Window chrome follows the app theme: the content paints behind a transparent
+// Windows title-bar overlay, so only the caption-button glyph colour changes.
+const chrome = theme => (theme === 'light'
+  ? { bg: '#ffffff', glyph: '#1d1d1f' }
+  : { bg: '#1c1c1e', glyph: '#f5f5f7' });
+const titleBarOverlay = theme => ({ color: '#00000000', symbolColor: chrome(theme).glyph, height: 52 });
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
@@ -74,6 +81,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null); // the app lives in the tray and in its own UI — no File/Edit/View bar
   storage = new Storage();
   await storage.init();
 
@@ -98,6 +106,8 @@ app.whenReady().then(async () => {
           notify('PulseKeeper Updated', `${evt.succeeded} source${evt.succeeded !== 1 ? 's' : ''} refreshed.`, () => togglePopup());
         }
       });
+    } else if (evt.type === 'progress') {
+      broadcastToAll('collect:progress', { done: evt.done, total: evt.total, name: evt.source?.name });
     } else if (evt.type === 'sourceError') {
       broadcastToAll('collect:sourceError', { name: evt.source?.name, error: evt.error });
     }
@@ -147,7 +157,7 @@ function buildContextMenu() {
     { label: 'View Digest', click: () => openDigest() },
     { label: 'Refresh Now', click: () => { if (!isCollecting) collector.collectAll(); }, enabled: !isCollecting },
     { type: 'separator' },
-    { label: 'Settings', click: () => openSettings() },
+    { label: 'Open PulseKeeper', click: () => openSettings() },
     { label: 'Export to AgentPlatform', click: () => exportToAgentPlatform() },
     { label: 'Open Data Folder', click: () => shell.openPath(storage.getDataDir()) },
     { type: 'separator' },
@@ -237,20 +247,25 @@ function getPopupPosition() {
 }
 
 // ─── Settings window ──────────────────────────────────────────────────────────
-function openSettings(tab) {
+async function openSettings(tab) {
   if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.isMinimized() && settingsWin.restore();
     settingsWin.focus();
     if (tab) settingsWin.webContents.send('navigate', tab);
     return;
   }
+  const theme = (await storage.getSettings()).display?.theme || 'dark';
   settingsWin = new BrowserWindow({
-    width: 920,
-    height: 700,
-    minWidth: 740,
-    minHeight: 540,
+    width: 1240,
+    height: 800,
+    minWidth: 940,
+    minHeight: 600,
     title: 'PulseKeeper',
-    backgroundColor: '#1a1a2e',
+    show: false,                       // shown once painted, so there is no white flash
+    backgroundColor: chrome(theme).bg,
     icon: APP_ICON_PATH,
+    titleBarStyle: 'hidden',           // the app draws its own title area; Windows keeps its caption buttons
+    titleBarOverlay: titleBarOverlay(theme),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -258,7 +273,13 @@ function openSettings(tab) {
     }
   });
   settingsWin.loadFile(path.join(__dirname, '../../src/renderer/index.html'));
+  settingsWin.once('ready-to-show', () => settingsWin.show());
   settingsWin.on('closed', () => { settingsWin = null; });
+  if (!app.isPackaged) {
+    settingsWin.webContents.on('before-input-event', (e, input) => {
+      if (input.type === 'keyDown' && (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i'))) settingsWin.webContents.toggleDevTools();
+    });
+  }
   if (tab) settingsWin.webContents.once('did-finish-load', () => settingsWin.webContents.send('navigate', tab));
 }
 
@@ -296,7 +317,7 @@ async function openDigest() {
       width: 1200,
       height: 820,
       title: 'PulseKeeper — Digest',
-      backgroundColor: '#1a1a2e',
+      backgroundColor: chrome(settings.display?.theme || 'dark').bg,
       icon: APP_ICON_PATH,
       webPreferences: {
         preload: path.join(__dirname, 'digestPreload.js'),
@@ -452,7 +473,7 @@ async function openDigest() {
       if (digestBrowser === 'internal') {
         digestWin.webContents.loadURL(url);
       } else {
-        shell.openExternal(url);
+        openExternalSafe(url);
       }
       return { action: 'deny' };
     });
@@ -462,7 +483,7 @@ async function openDigest() {
       digestWin.webContents.on('will-navigate', (event, url) => {
         if (!url.startsWith('file://')) {
           event.preventDefault();
-          shell.openExternal(url);
+          openExternalSafe(url);
         }
       });
     }
@@ -545,11 +566,19 @@ async function generateAIDigestNow(reason = 'manual') {
   aiDigestState = { inProgress: true, provider, model, startedAt: Date.now() };
   broadcastToAll('digest:generating', { provider, model, reason, startedAt: aiDigestState.startedAt });
 
+  // Streamed token counts, throttled so a fast model doesn't flood IPC.
+  let lastProgress = 0;
+  const onProgress = chars => {
+    if (Date.now() - lastProgress < 400) return;
+    lastProgress = Date.now();
+    broadcastToAll('digest:progress', { chars, tokens: Math.round(chars / 3.5) });
+  };
+
   try {
-    const markdown = await generateDigest(settings.llm, items);
-    await storage.saveAIDigest({ provider, model, markdown, itemCount: items.length, error: null });
+    const { markdown, used, total } = await generateDigest(settings.llm, items, { onProgress });
+    await storage.saveAIDigest({ provider, model, markdown, itemCount: used, totalItems: total, error: null });
     aiDigestState = { inProgress: false, provider: null, model: null, startedAt: null };
-    broadcastToAll('digest:generated', { provider, model, generatedAt: new Date().toISOString(), itemCount: items.length });
+    broadcastToAll('digest:generated', { provider, model, generatedAt: new Date().toISOString(), itemCount: used, totalItems: total });
     // Refresh an open digest window so it picks up the fresh summary.
     if (digestWin && !digestWin.isDestroyed()) { openDigest().catch(() => {}); }
     return { ok: true, markdown };
@@ -562,7 +591,8 @@ async function generateAIDigestNow(reason = 'manual') {
       generatedAt: prev?.generatedAt || new Date().toISOString(),
       provider, model,
       markdown: prev?.markdown || null,
-      itemCount: prev?.itemCount ?? items.length,
+      itemCount: prev?.itemCount ?? null,
+      totalItems: prev?.totalItems ?? null,
       error: msg,
       erroredAt: new Date().toISOString()
     });
@@ -661,12 +691,20 @@ function setupIPC() {
 
   ipcMain.handle('content:getAll', () => storage.getAllContent());
   ipcMain.handle('content:getBySource', (_, id) => storage.getContent(id));
+  // News view: server-side filter/search/sort/page, plus the category → source tree with unread counts.
+  ipcMain.handle('content:query', (_, q) => storage.queryContent(q));
+  ipcMain.handle('content:channels', () => storage.getChannels());
 
   ipcMain.handle('settings:get', () => storage.getSettings());
   ipcMain.handle('settings:save', async (_, s) => {
     await storage.saveSettings(s);
     await scheduler.restart();
     applyStartupSetting(s.runAtStartup === true);
+    if (settingsWin && !settingsWin.isDestroyed()) {
+      const theme = s.display?.theme || 'dark';
+      settingsWin.setBackgroundColor(chrome(theme).bg);
+      try { settingsWin.setTitleBarOverlay(titleBarOverlay(theme)); } catch { /* not supported on this platform */ }
+    }
   });
   ipcMain.handle('settings:getProviders', () => getProviders());
 
@@ -689,6 +727,7 @@ function setupIPC() {
         provider: cache.provider || null,
         model: cache.model || null,
         itemCount: cache.itemCount ?? null,
+        totalItems: cache.totalItems ?? null,
         hasSummary: !!cache.markdown,
         error: cache.error || null
       } : null
@@ -701,24 +740,32 @@ function setupIPC() {
     const cfg = llmConfig || (await storage.getSettings()).llm || {};
     return testConnection(cfg);
   });
+  // Models the provider really offers (installed models for Ollama).
+  ipcMain.handle('llm:listModels', async (_, llmConfig) => {
+    const cfg = llmConfig || (await storage.getSettings()).llm || {};
+    return listModels(cfg);
+  });
 
   ipcMain.handle('ui:openSettings', (_, tab) => openSettings(tab));
   ipcMain.handle('ui:openDigest', () => openDigest());
   ipcMain.handle('ui:openDataDir', () => shell.openPath(storage.getDataDir()));
   ipcMain.handle('ui:openOutputDir', () => shell.openPath(storage.getOutputDir()));
   ipcMain.handle('ui:openExtensionDir', () => shell.openPath(storage.getExtensionDir()));
-  ipcMain.handle('ui:openExternal', (_, url) => shell.openExternal(url));
+  ipcMain.handle('ui:openExternal', (_, url) => openExternalSafe(url));
   ipcMain.handle('ui:exportAgentPlatform', () => exportToAgentPlatform());
 
   ipcMain.handle('popup:close', () => { if (popupWin) popupWin.hide(); });
-  ipcMain.handle('popup:getLatest', async () => (await storage.getAllContent()).slice(0, 100));
+  ipcMain.handle('popup:getLatest', async () => (await storage.queryContent({ limit: 100 })).items);
 
   // Read tracking
   ipcMain.handle('content:getReadIds', async () => [...(await storage.getReadIds())]);
   ipcMain.handle('content:markRead', (_, ids) => storage.markRead(ids));
-  ipcMain.handle('content:markAllRead', async () => {
-    const items = await storage.getAllContent();
-    await storage.markAllRead(items.map(i => i.id));
+  ipcMain.handle('content:markUnread', (_, ids) => storage.markUnread(ids));
+  // Optionally scoped to a view (same filter shape as content:query) — "mark everything in this feed read".
+  ipcMain.handle('content:markAllRead', async (_, filter) => {
+    const { items } = await storage.queryContent({ ...filter, unreadOnly: true });
+    await storage.markRead(items.map(i => i.id));
+    return items.length;
   });
 
   // Source health
@@ -736,7 +783,7 @@ function setupIPC() {
   ipcMain.handle('digestNav:forward',  () => { if (digestWin && !digestWin.isDestroyed()) digestWin.webContents.goForward(); });
   ipcMain.handle('digestNav:reload',   () => { if (digestWin && !digestWin.isDestroyed()) digestWin.webContents.reload(); });
   ipcMain.handle('digestNav:home',     () => { if (digestWin && !digestWin.isDestroyed() && digestHomePath) digestWin.loadFile(digestHomePath); });
-  ipcMain.handle('digestNav:openExternal', (_, url) => shell.openExternal(url));
+  ipcMain.handle('digestNav:openExternal', (_, url) => openExternalSafe(url));
 
   // Settings backup / restore
   ipcMain.handle('settings:exportBackup', async () => {
@@ -758,32 +805,19 @@ function setupIPC() {
       filters: [{ name: 'OPML Files', extensions: ['opml', 'xml'] }],
       properties: ['openFile']
     });
-    if (result.canceled || !result.filePaths.length) return { imported: 0 };
-    const raw = fs.readFileSync(result.filePaths[0], 'utf8');
-    // Parse <outline> elements with xmlUrl attributes
-    const outlines = [...raw.matchAll(/<outline[^>]+xmlUrl="([^"]+)"[^>]*(?:text|title)="([^"]+)"/gi)];
-    if (!outlines.length) {
-      // Also try title before xmlUrl ordering
-      const alt = [...raw.matchAll(/<outline[^>]*(?:text|title)="([^"]+)"[^>]+xmlUrl="([^"]+)"/gi)];
-      for (const m of alt) {
-        const name = m[1].trim() || 'Imported Feed';
-        const url  = m[2].trim();
-        if (url) await storage.addSource({ name, type: 'rss', config: { url }, maxItems: 20 });
-      }
-      const count = alt.length;
-      if (count) notify('OPML Imported', `${count} feed${count !== 1 ? 's' : ''} added.`);
-      broadcastToAll('sources:updated', {});
-      return { imported: count };
+    if (result.canceled || !result.filePaths.length) return { imported: 0, skipped: 0 };
+
+    const known = new Set((await storage.getSources()).map(s => s.config?.url).filter(Boolean));
+    let imported = 0, skipped = 0;
+    for (const feed of parseOPML(fs.readFileSync(result.filePaths[0], 'utf8'))) {
+      if (!httpUrl(feed.url) || known.has(feed.url)) { skipped++; continue; }
+      known.add(feed.url);
+      await storage.addSource({ name: feed.name, type: 'rss', category: feed.category, config: { url: feed.url } });
+      imported++;
     }
-    for (const m of outlines) {
-      const url  = m[1].trim();
-      const name = m[2].trim() || 'Imported Feed';
-      if (url) await storage.addSource({ name, type: 'rss', config: { url }, maxItems: 20 });
-    }
-    const count = outlines.length;
-    notify('OPML Imported', `${count} feed${count !== 1 ? 's' : ''} added.`);
+    if (imported) notify('OPML Imported', `${imported} feed${imported !== 1 ? 's' : ''} added.`);
     broadcastToAll('sources:updated', {});
-    return { imported: count };
+    return { imported, skipped };
   });
 
   ipcMain.handle('settings:importBackup', async () => {
