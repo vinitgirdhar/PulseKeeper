@@ -111,6 +111,20 @@ function openMenu(anchor, items, { current, onPick }) {
   el.querySelector('button').focus();
 }
 
+// ── Markdown-lite ─────────────────────────────────────────────────────────────
+// Just what a summary needs (bullets, paragraphs, **bold**, `code`). Escapes first, so model output can't inject markup.
+function mdLite(text) {
+  const inline = s => escapeHTML(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  let html = '', inList = false;
+  for (const line of String(text).replace(/\r/g, '').split('\n')) {
+    const m = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/.exec(line);
+    if (m) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${inline(m[1])}</li>`; continue; }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (line.trim()) html += `<p>${inline(line.trim())}</p>`;
+  }
+  return html + (inList ? '</ul>' : '');
+}
+
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const ACCENTS = {
   blue: '#007aff', purple: '#af52de', pink: '#ff2d55', red: '#ff3b30', orange: '#ff9500', green: '#28a745', graphite: '#8e8e93'

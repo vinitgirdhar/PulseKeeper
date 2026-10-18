@@ -148,7 +148,7 @@ async function openaiChat(cfg, messages, { maxTokens, temperature, timeoutMs, on
     for await (const chunk of stream) {
       wd.kick();
       const piece = chunk.choices?.[0]?.delta?.content;
-      if (piece) { text += piece; onProgress?.(text.length); }
+      if (piece) { text += piece; onProgress?.(text.length, text); }
     }
     return text;
   } catch (err) {
@@ -190,7 +190,7 @@ async function ollamaChat(cfg, messages, { maxTokens, temperature, timeoutMs, on
         if (!line) continue;
         const msg = JSON.parse(line);
         if (msg.error) throw new Error(msg.error);
-        if (msg.message?.content) { text += msg.message.content; onProgress?.(text.length); }
+        if (msg.message?.content) { text += msg.message.content; onProgress?.(text.length, text); }
       }
     }
     return text;
@@ -205,8 +205,12 @@ const idleError = ms => Object.assign(new Error(
   `The model sent nothing for ${Math.round(ms / 1000)}s, so the request was cancelled. Raise "Request timeout" in AI / LLM settings — slow CPU models can need minutes before the first token.`
 ), { friendly: true });
 
-// Stream a chat completion and return the cleaned text.
-async function chat(cfg, messages, opts) {
+// Reasoning models inline their chain of thought as <think>…</think>.
+const stripThinking = text => text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').replace(/<think>[\s\S]*$/i, '').trim();
+
+// Stream a chat completion and return the cleaned text. `onProgress(chars, textSoFar)` sees cleaned text.
+async function chat(cfg, messages, { onProgress, ...rest }) {
+  const opts = { ...rest, onProgress: onProgress && ((n, t) => onProgress(n, stripThinking(t))) };
   let text;
   if (cfg.provider === 'ollama') {
     try { text = await ollamaChat(cfg, messages, opts); }
@@ -217,8 +221,7 @@ async function chat(cfg, messages, opts) {
   }
   text ??= await openaiChat(cfg, messages, opts);
 
-  // Reasoning models inline their chain of thought as <think>…</think>.
-  text = text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').replace(/<think>[\s\S]*$/i, '').trim();
+  text = stripThinking(text);
   if (!text) throw Object.assign(new Error('The model returned an empty response. Try another model, or raise the context window if the prompt was cut off.'), { friendly: true });
   return text;
 }
@@ -364,4 +367,31 @@ async function generateDigest(cfg, items, { onProgress } = {}) {
   }
 }
 
-module.exports = { generateDigest, testConnection, listModels, getProviders, isConfigured, PROVIDERS };
+/**
+ * Summarise one story as a few Markdown bullets. `article` is the extracted page
+ * text (falls back to the feed's teaser); it is cut to fit the model's context.
+ * @returns {{ markdown: string }}
+ */
+async function summarizeItem(cfg, item, article = '', { onProgress } = {}) {
+  assertUsable(cfg);
+  const local = LOCAL_PROVIDERS.has(cfg.provider);
+  const ctx = local ? numCtx(cfg) : CLOUD_CONTEXT_TOKENS;
+  const maxTokens = local ? Math.min(500, Math.floor(ctx * 0.25)) : 500;
+
+  const system = 'You summarise news stories for a busy reader. Reply with 3 to 5 short Markdown bullet points ("- "), most important first, no heading and no preamble. Use only the text provided. If the text is only a short teaser, say so in one bullet instead of guessing.';
+  const head = `Title: ${item.title}\nSource: ${item.sourceName || ''}\nPublished: ${item.publishedAt || ''}\n\n`;
+  const budgetChars = Math.max(1500, Math.floor((ctx - maxTokens - estimateTokens(system + head) - 100) * 3.5));
+  const body = (article || item.description || '').slice(0, budgetChars);
+
+  try {
+    const markdown = await chat(cfg, [
+      { role: 'system', content: system },
+      { role: 'user', content: head + body }
+    ], { maxTokens, temperature: 0.3, timeoutMs: resolveTimeout(cfg, 300000), onProgress });
+    return { markdown };
+  } catch (err) {
+    throw new Error(friendlyError(err, cfg));
+  }
+}
+
+module.exports = { generateDigest, summarizeItem, testConnection, listModels, getProviders, isConfigured, PROVIDERS };

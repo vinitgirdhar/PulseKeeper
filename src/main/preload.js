@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('pcbAPI', {
     getReadIds:  () => ipcRenderer.invoke('content:getReadIds'),
     markRead:    (ids) => ipcRenderer.invoke('content:markRead', ids),
     markUnread:  (ids) => ipcRenderer.invoke('content:markUnread', ids),
+    setSaved:    (id, saved) => ipcRenderer.invoke('content:setSaved', id, saved),
     markAllRead: (filter) => ipcRenderer.invoke('content:markAllRead', filter)
   },
 
@@ -61,7 +62,9 @@ contextBridge.exposeInMainWorld('pcbAPI', {
     generateDigestNow: () => ipcRenderer.invoke('llm:generateDigestNow'),
     getDigestStatus:   () => ipcRenderer.invoke('llm:getDigestStatus'),
     test:              (config) => ipcRenderer.invoke('llm:test', config),
-    listModels:        (config) => ipcRenderer.invoke('llm:listModels', config)
+    listModels:        (config) => ipcRenderer.invoke('llm:listModels', config),
+    getSummary:        (id) => ipcRenderer.invoke('llm:getSummary', id),
+    summarize:         (id, force) => ipcRenderer.invoke('llm:summarize', id, force)
   },
 
   // UI
@@ -93,6 +96,7 @@ contextBridge.exposeInMainWorld('pcbAPI', {
     themeOsSync:     (fn) => { ipcRenderer.removeAllListeners('theme:osSync');     ipcRenderer.on('theme:osSync',     (_, d) => fn(d)); },
     digestGenerating:(fn) => { ipcRenderer.removeAllListeners('digest:generating'); ipcRenderer.on('digest:generating', (_, d) => fn(d)); },
     digestProgress:  (fn) => { ipcRenderer.removeAllListeners('digest:progress');   ipcRenderer.on('digest:progress',   (_, d) => fn(d)); },
+    summaryProgress: (fn) => { ipcRenderer.removeAllListeners('summary:progress'); ipcRenderer.on('summary:progress', (_, d) => fn(d)); },
     digestGenerated: (fn) => { ipcRenderer.removeAllListeners('digest:generated');  ipcRenderer.on('digest:generated',  (_, d) => fn(d)); },
     digestError:     (fn) => { ipcRenderer.removeAllListeners('digest:error');      ipcRenderer.on('digest:error',      (_, d) => fn(d)); }
   }

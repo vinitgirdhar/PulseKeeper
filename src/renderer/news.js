@@ -24,6 +24,8 @@ const News = (() => {
     lastGroup: null, structure: '', token: 0,
     active: true
   };
+  // AI summaries per story id: finished records, streamed partial text, in-flight ids, failures.
+  const summary = { done: new Map(), partial: new Map(), pending: new Set(), failed: new Map() };
 
   let collapsed = new Set();
   try { collapsed = new Set(JSON.parse(localStorage.getItem('pk.collapsed') || '[]')); } catch { /* storage unavailable */ }
@@ -68,6 +70,8 @@ const News = (() => {
       state.structure = structure;
       $('channels').innerHTML = channelsHTML(tree);
     }
+    $('badgeSaved').textContent = tree.saved || '';
+    $('badgeSaved').classList.add('quiet');
     const unreadAll = $('badgeAll');
     if (parseInt(unreadAll.textContent, 10) !== tree.unread) { Motion.count(unreadAll, tree.unread); unreadAll.classList.toggle('hot', tree.unread > 0); }
     for (const c of tree.categories) {
@@ -89,6 +93,7 @@ const News = (() => {
   function findSelection() {
     const { kind, id } = state.sel;
     if (kind === 'all') return { name: 'All Stories', total: state.channels.total, unread: state.channels.unread };
+    if (kind === 'saved') return { name: 'Saved', total: state.channels.saved, unread: state.channels.savedUnread };
     for (const c of state.channels.categories) {
       if (kind === 'category' && c.name === id) return { name: c.name, total: c.total, unread: c.unread };
       for (const s of c.sources) if (kind === 'source' && s.id === id) return { name: s.name, total: s.total, unread: s.unread, category: c.name };
@@ -100,6 +105,7 @@ const News = (() => {
   function currentRow() {
     const { kind, id } = state.sel;
     if (kind === 'all') return $('navAll');
+    if (kind === 'saved') return $('navSaved');
     const row = [...$('channels').querySelectorAll('[data-channel]')].find(b => b.dataset.channel === kind && b.dataset.id === id);
     if (row && row.offsetHeight) return row;
     const cat = findSelection()?.category;
@@ -127,6 +133,7 @@ const News = (() => {
   }
 
   const query = () => ({
+    saved: state.sel.kind === 'saved' || undefined,
     sourceId: state.sel.kind === 'source' ? state.sel.id : undefined,
     category: state.sel.kind === 'category' ? state.sel.id : undefined,
     unreadOnly: state.filter === 'unread',
@@ -149,11 +156,12 @@ const News = (() => {
   const groupOf = it => (state.sort === 'source' ? it.sourceName : dayLabel(it.publishedAt));
 
   function storyHTML(it) {
-    return `<div class="story ${it.read ? 'read' : 'unread'} ${it.id === state.selectedId ? 'selected' : ''}" data-id="${escapeHTML(it.id)}" role="button" tabindex="0">
+    return `<div class="story ${it.read ? 'read' : 'unread'} ${it.saved ? 'saved' : ''} ${it.id === state.selectedId ? 'selected' : ''}" data-id="${escapeHTML(it.id)}" role="button" tabindex="0">
       <div class="story-body">
         <div class="story-meta">
           <span class="story-source">${typeTile(it.sourceType)}<span>${escapeHTML(it.sourceName)}</span></span>
           <span>·</span><time>${timeAgo(it.publishedAt)}</time>
+          <span class="story-saved" title="Saved">${icon('bookmarkfill')}</span>
         </div>
         <div class="story-title">${escapeHTML(it.title)}</div>
         ${it.description ? `<div class="story-desc">${escapeHTML(it.description)}</div>` : ''}
@@ -183,6 +191,7 @@ const News = (() => {
   }
 
   function emptyHTML() {
+    if (state.sel.kind === 'saved' && !state.search) return `<div class="empty">${icon('bookmark')}<h3>Nothing saved yet</h3><p>Open a story and press the bookmark (or <b>S</b>) to keep it here — saved stories stay even after they age out of your feeds.</p></div>`;
     if (state.search) return `<div class="empty">${icon('search')}<h3>No results</h3><p>Nothing matches “${escapeHTML(state.search)}”.</p></div>`;
     if (state.filter === 'unread') return `<div class="empty">${icon('circleok')}<h3>You’re all caught up</h3><p>No unread stories here.</p></div>`;
     return `<div class="empty">${icon('news')}<h3>No stories yet</h3><p>Refresh to fetch your sources, or add one under Sources.</p><button class="btn btn-primary" data-act="refresh">${icon('refresh')}Refresh Now</button></div>`;
@@ -249,12 +258,76 @@ const News = (() => {
   async function markAll() {
     const sel = findSelection();
     if (!sel?.unread) { toast('Everything here is already read'); return; }
-    const n = await api.content.markAllRead({ sourceId: query().sourceId, category: query().category });
+    const { saved, sourceId, category } = query();
+    const n = await api.content.markAllRead({ saved, sourceId, category });
     state.items.forEach(i => { i.read = true; });
     list().querySelectorAll('.story, .hero').forEach(el => { el.classList.add('read'); el.classList.remove('unread'); });
     toast(`${n} ${n === 1 ? 'story' : 'stories'} marked as read`);
     if (state.filter === 'unread') load();
     loadChannels();
+  }
+
+  async function setSaved(item, saved) {
+    item.saved = saved;
+    list().querySelectorAll(`.story[data-id="${CSS.escape(item.id)}"]`).forEach(el => el.classList.toggle('saved', saved));
+    if (state.readerOpen && state.selectedId === item.id) renderReaderHead(item);
+    try {
+      await api.content.setSaved(item.id, saved);
+      toast(saved ? 'Saved' : 'Removed from Saved');
+    } catch (e) {
+      item.saved = !saved;
+      toast(e.message, 'error');
+    }
+    await loadChannels();
+    if (state.sel.kind === 'saved' && !saved) load({ silent: true }); // it just left this view
+  }
+
+  // ── AI summary ─────────────────────────────────────────────────────────────
+  const aiCard = () => $('aiCard');
+
+  function paintSummary(id) {
+    const el = aiCard();
+    if (!el || id !== state.selectedId) return;
+    el.hidden = false;
+    if (summary.pending.has(id)) {
+      el.className = 'ai-card';
+      el.innerHTML = `<div class="ai-head"><span class="spinner"></span>Summarizing…</div><div class="ai-text">${mdLite(summary.partial.get(id) || '')}</div>`;
+    } else if (summary.done.has(id)) {
+      const r = summary.done.get(id);
+      el.className = 'ai-card';
+      el.innerHTML = `<div class="ai-head">${icon('ai')}AI summary<span class="meta">${escapeHTML(r.model || '')}${r.fullText ? ' · from the full article' : ' · from the preview'}</span>
+        <button class="btn btn-icon btn-ghost btn-sm" data-act="resummarize" title="Regenerate" aria-label="Regenerate summary">${icon('refresh')}</button></div>
+        <div class="ai-text">${mdLite(r.markdown)}</div>`;
+    } else if (summary.failed.has(id)) {
+      el.className = 'ai-card';
+      el.innerHTML = `<div class="ai-head">${icon('warning')}Couldn’t summarize</div><div class="ai-text err">${escapeHTML(summary.failed.get(id))}</div>
+        <div class="reader-cta" style="margin-top:12px"><button class="btn btn-tint btn-sm" data-act="summarize">${icon('refresh')}Try again</button></div>`;
+    } else {
+      el.className = 'ai-card idle';
+      el.innerHTML = `<p>${App.llmReady() ? 'Get the key points in a few bullets.' : 'Connect a cloud or local model to summarize stories.'}</p>
+        <button class="btn btn-tint" data-act="summarize">${icon('ai')}${App.llmReady() ? 'Summarize with AI' : 'Set up AI'}</button>`;
+    }
+  }
+
+  async function showSummary(it) {
+    paintSummary(it.id);
+    if (summary.done.has(it.id) || summary.pending.has(it.id)) return;
+    try {
+      const cached = await api.llm.getSummary(it.id);
+      if (cached) { summary.done.set(it.id, cached); paintSummary(it.id); }
+    } catch { /* the idle card is still correct */ }
+  }
+
+  async function summarize(it, force = false) {
+    if (!App.llmReady()) { toast('Set up a model first'); App.navigate('ai'); return; }
+    summary.pending.add(it.id);
+    summary.failed.delete(it.id);
+    summary.partial.delete(it.id);
+    paintSummary(it.id);
+    const res = await api.llm.summarize(it.id, force).catch(e => ({ ok: false, error: e.message }));
+    summary.pending.delete(it.id);
+    if (res.ok) summary.done.set(it.id, res); else summary.failed.set(it.id, res.error);
+    paintSummary(it.id);
   }
 
   // ── Reader ─────────────────────────────────────────────────────────────────
@@ -265,6 +338,7 @@ const News = (() => {
       <span class="spacer"></span>
       <button class="btn btn-icon btn-ghost" data-act="prev" title="Previous (K)" aria-label="Previous story" ${idx <= 0 ? 'disabled' : ''}>${icon('up')}</button>
       <button class="btn btn-icon btn-ghost" data-act="next" title="Next (J)" aria-label="Next story" ${idx >= state.items.length - 1 ? 'disabled' : ''}>${icon('down')}</button>
+      <button class="btn btn-icon btn-ghost ${it.saved ? 'on' : ''}" data-act="toggleSaved" title="${it.saved ? 'Remove from Saved' : 'Save'} (S)" aria-label="${it.saved ? 'Remove from Saved' : 'Save story'}" aria-pressed="${!!it.saved}">${icon(it.saved ? 'bookmarkfill' : 'bookmark')}</button>
       <button class="btn btn-icon btn-ghost" data-act="toggleRead" title="${it.read ? 'Mark as unread' : 'Mark as read'} (M)" aria-label="${it.read ? 'Mark as unread' : 'Mark as read'}">${icon(it.read ? 'circleok' : 'circle')}</button>
       <button class="btn btn-icon btn-ghost" data-act="copy" title="Copy link" aria-label="Copy link">${icon('link')}</button>`;
   }
@@ -284,8 +358,10 @@ const News = (() => {
         <div class="reader-meta">${meta}</div>
         <div class="reader-text">${it.description ? escapeHTML(it.description) : '<span class="hint">No preview available for this story.</span>'}</div>
         <div class="reader-cta"><button class="btn btn-primary" data-act="open">${icon('external')}Read Full Story</button></div>
+        <div class="ai-card" id="aiCard" hidden></div>
       </div>`;
     renderReaderHead(it);
+    showSummary(it);
     Motion.enter($('readerInner').querySelectorAll('.reader-scroll > *'), { y: 8, each: 0.04, duration: 0.45 });
   }
 
@@ -324,6 +400,9 @@ const News = (() => {
     if (act === 'prev') step(-1);
     else if (act === 'next') step(1);
     else if (act === 'toggleRead') setRead(it, !it.read);
+    else if (act === 'toggleSaved') setSaved(it, !it.saved);
+    else if (act === 'summarize') summarize(it);
+    else if (act === 'resummarize') summarize(it, true);
     else if (act === 'open') it.url && api.ui.openExternal(it.url);
     else if (act === 'copy') navigator.clipboard.writeText(it.url || '').then(() => toast('Link copied'), () => toast('Couldn’t copy the link', 'error'));
   }
@@ -359,6 +438,11 @@ const News = (() => {
       else img.remove();
     });
     onImageError($('readerInner'), img => img.remove());
+    api.on.summaryProgress(d => {
+      if (!summary.pending.has(d.id)) return;
+      summary.partial.set(d.id, d.text);
+      if (d.id === state.selectedId) paintSummary(d.id);
+    });
 
     // Infinite scroll: fetch the next page shortly before the end.
     new IntersectionObserver(es => { if (es[0].isIntersecting) loadMore(); }, { root: $('newsScroll'), rootMargin: '600px' }).observe($('feedMore'));
@@ -371,6 +455,7 @@ const News = (() => {
       else if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); step(1); }
       else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
       else if (e.key === 'm' && state.selectedId) readerAction('toggleRead');
+      else if (e.key === 's' && state.selectedId) readerAction('toggleSaved');
       else if ((e.key === 'o' || e.key === 'Enter') && state.selectedId) readerAction('open');
     });
   }

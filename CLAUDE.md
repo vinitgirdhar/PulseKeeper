@@ -41,6 +41,8 @@ taskbar, behind the `^` arrow). The tray icon is a dark-blue square with a cyan 
 Closing the `npm start` terminal quits the app. `window-all-closed` is intercepted so closing
 windows does NOT quit — only the tray "Quit" or killing the process does.
 
+README screenshots (`Images/screenshots/`) are generated the same way: real renderer + mock `pcbAPI` + sample stories, in headless Chromium at 2× scale.
+
 The renderer can also be exercised in a plain browser: load `src/renderer/index.html` with a stub
 `window.pcbAPI` injected before the scripts (that's how the UI was verified outside Windows).
 
@@ -51,15 +53,16 @@ everything goes through the preload bridge.
 
 ### Main process — [src/main/](src/main/)
 - [index.js](src/main/index.js) — app entry: tray, windows (main/popup/digest), all `ipcMain` handlers, notifications, digest orchestration. `openExternalSafe()` is the only path to `shell.openExternal` (http/https/mailto only — feed links are untrusted).
-- [storage.js](src/main/storage.js) — JSON file persistence + read model. Read-modify-write sections are synchronous (no `await` between read and write) so parallel callers can't lose updates; reads are cached by mtime. `queryContent()` (filter/search/sort/dedupe/page) and `getChannels()` (category → source tree with unread counts) feed the UI; mute words, source name/type/category are applied **at read time**.
+- [storage.js](src/main/storage.js) — JSON file persistence + read model. Read-modify-write sections are synchronous (no `await` between read and write) so parallel callers can't lose updates; reads are cached by mtime. `queryContent()` (filter/search/sort/dedupe/page; `saved: true` queries the saved snapshots) and `getChannels()` (category → source tree with unread/saved counts) feed the UI; mute words, source name/type/category are applied **at read time**.
 - [collector.js](src/main/collector.js) — fetches enabled sources 5 at a time, conditional GET, `mergeItems()` (retention by **publish date** with a per-source floor), failure backoff. Emits `start/progress/sourceComplete/sourceError/complete`.
 - [scheduler.js](src/main/scheduler.js) — `node-cron` refresh + auto-digest. `cronEvery(minutes)` maps intervals ≥ 60 min to hourly crons (a `*/120` minute field fires every hour).
 - [http.js](src/main/http.js) — the one HTTP helper every fetcher uses (UA, timeout, retry, size cap, charset, ETag/Last-Modified). Don't hand-roll `https.get` again.
 - [util.js](src/main/util.js) — `stripHTML`, `toISO`, `canonicalUrl`, `httpUrl`, `parseOPML`.
 - [server.js](src/main/server.js) — local HTTP **capture server on port 7828** (`127.0.0.1`) for the browser extension; accepts writes only from `*-extension://` origins.
-- [llmClient.js](src/main/llmClient.js) — universal LLM client: cloud/custom via the **OpenAI SDK** (streaming, idle watchdog), **Ollama via its native `/api/chat`** (sets `num_ctx`). `generateDigest` packs items to the context budget; `listModels` asks the provider; keys resolve from `apiKey` or the per-provider `apiKeys` map; `isConfigured()` is the single "is the LLM usable" check.
+- [llmClient.js](src/main/llmClient.js) — universal LLM client (digests via `generateDigest`, one-story summaries via `summarizeItem`): cloud/custom via the **OpenAI SDK** (streaming, idle watchdog), **Ollama via its native `/api/chat`** (sets `num_ctx`). `generateDigest` packs items to the context budget; `listModels` asks the provider; keys resolve from `apiKey` or the per-provider `apiKeys` map; `isConfigured()` is the single "is the LLM usable" check.
 - [outputRenderer.js](src/main/outputRenderer.js) — builds the HTML / Markdown digest (self-contained page; grouped by category).
 - [agentExport.js](src/main/agentExport.js) — exports an AgentPlatform agent pack.
+- [sources/article.js](src/main/sources/article.js) — `extractArticle(url)`: best-effort readable text of an article page (feeds the AI story summary; returns `''` on failure).
 - [sources/](src/main/sources/) — one fetcher per type; [sources/index.js](src/main/sources/index.js) holds `SOURCE_TYPES` (the UI form schema) and `fetchSource(source, state)` → `{ items, state }` or `{ notModified: true }`. RSS/podcast/newsletter/blog all route through [sources/rss.js](src/main/sources/rss.js) (`loadFeed()` is also used by Reddit/YouTube).
 - [preload.js](src/main/preload.js) — exposes `window.pcbAPI` (sources/content/settings/output/digest/llm/ui/popup + `on` events) to the renderer via `contextBridge`.
 
@@ -76,7 +79,7 @@ Chrome/Edge MV3 extension (load unpacked). Right-click → "Send to PulseKeeper"
 ## Data & config (runtime, not in repo)
 
 User data lives in **`%USERPROFILE%\Documents\PulseKeeper\`**:
-`sources.json`, `settings.json`, `read.json`, `health.json`, `ai-digest.json`, and `content/`, `output/`, `history/`, `extension/` folders.
+`sources.json`, `settings.json`, `read.json`, `saved.json` (full snapshots — survive retention and source deletion), `summaries.json` (cached per-story AI summaries, capped), `health.json`, `ai-digest.json`, and `content/`, `output/`, `history/`, `extension/` folders.
 Deleting these resets the app to the defaults defined in [storage.js](src/main/storage.js). An unreadable JSON file is copied to `<file>.corrupt-<ts>` before it can be overwritten.
 `health.json` per source also holds `fetchState` (ETag/Last-Modified + request signature), `consecutiveFailures`, `lastDurationMs`.
 Sources carry a `category` (defaults inferred from `seedId`, else "General").

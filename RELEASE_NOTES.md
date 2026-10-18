@@ -6,6 +6,8 @@
 
 ### News aggregator + new UI
 - New **News** home: a sidebar of categories and sources with live unread counts; select all stories, a category, or one source. Search, unread filter, sorting, day grouping, a reader panel and keyboard shortcuts (`J`/`K`, `M`, `O`, `/`, `Esc`)
+- **Saved** stories (bookmark, `S`): kept as snapshots, so they survive retention pruning and deleting the source
+- **AI summary per story** in the reader: extracts the article text (best effort), streams bullets from your model, caches the result
 - Sources now have a **category**; OPML folders import as categories
 - Complete visual redesign (Apple-style light/dark, accent colours, Inter, GSAP animations, reduced-motion aware); the tray popup and HTML digest follow the same design
 - Settings auto-save; the Add Source sheet fetches the new source immediately

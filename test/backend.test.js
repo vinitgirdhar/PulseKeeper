@@ -23,6 +23,7 @@ const { fetchRSS } = require('../src/main/sources/rss');
 const { discoverFeed } = require('../src/main/sources/rssDiscover');
 const { fetchWebpage } = require('../src/main/sources/webpage');
 const { fetchYouTube } = require('../src/main/sources/youtube');
+const { extractArticle } = require('../src/main/sources/article');
 const llm = require('../src/main/llmClient');
 
 const listen = handler => new Promise(resolve => {
@@ -249,5 +250,79 @@ test('llm: native Ollama streaming, think-stripping, model list, per-provider ke
     assert.equal(seen.auth, 'Bearer sk-from-map');
     assert.equal(llm.isConfigured({ enabled: true, provider: 'openai', apiKeys: { openai: 'k' } }), true);
     assert.equal(llm.isConfigured({ enabled: true, provider: 'openai' }), false);
+  } finally { server.close(); }
+});
+
+test('saved stories outlive pruning and their source; summaries are cached', async () => {
+  const storage = new Storage();
+  await storage.init();
+  const src = await storage.addSource({ name: 'Keeper', type: 'blog', category: 'Reading', config: { url: 'https://k.test/feed' } });
+  const item = { id: 'k:1', sourceId: src.id, sourceName: 'Keeper', sourceType: 'blog', title: 'Keep me', description: 'd', url: 'https://k.test/1', publishedAt: new Date().toISOString(), fetchedAt: new Date().toISOString() };
+  await storage.saveContent(src.id, [item]);
+
+  assert.equal(await storage.setSaved('k:1', true), true);
+  await assert.rejects(storage.setSaved('nope', true), /not found/);
+  assert.equal((await storage.queryContent({ sourceId: src.id })).items[0].saved, true);
+
+  await storage.saveContent(src.id, []);            // retention pruned it…
+  await storage.deleteSource(src.id);               // …and the source is gone
+  const saved = await storage.queryContent({ saved: true });
+  assert.deepEqual(saved.items.map(i => [i.id, i.saved, i.category]), [['k:1', true, 'Saved']]);
+  assert.equal((await storage.getChannels()).saved, 1);
+  assert.equal((await storage.getItem('k:1')).title, 'Keep me');
+
+  await storage.markRead(['k:1']);
+  assert.equal((await storage.getChannels()).savedUnread, 0);
+  assert.equal(await storage.setSaved('k:1', false), false);
+  assert.equal((await storage.queryContent({ saved: true })).total, 0);
+
+  assert.equal(await storage.getSummary('k:1'), null);
+  await storage.saveSummary('k:1', { markdown: '- one' });
+  assert.equal((await storage.getSummary('k:1')).markdown, '- one');
+});
+
+test('extractArticle: finds the article body, drops page furniture', async () => {
+  const para = n => `<p>Paragraph ${n} of the story with enough words to count as real article text for the extractor.</p>`;
+  const page = `<html><body class="single comments-open"><nav><p>Home About Contact us today for more links and menus</p></nav>
+    <article><h1>Headline</h1><h2>Subhead</h2>${para(1)}${para(2)}${para(3)}<div class="share-bar"><p>Share this story on every network you like</p></div></article>
+    <aside><p>Related: some other story that should not be part of the summary text at all</p></aside><footer><p>Copyright notice that is long enough to pass the length filter easily</p></footer></body></html>`;
+  const { server, base } = await listen((req, res) => {
+    if (req.url === '/pdf') { res.writeHead(200); return res.end('%PDF-1.4 binary'); }
+    res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(page);
+  });
+  try {
+    const text = await extractArticle(`${base}/a`);
+    assert.match(text, /Paragraph 1[\s\S]*Paragraph 3/);
+    assert.match(text, /## Subhead/);
+    assert.doesNotMatch(text, /Home About|Share this story|Related:|Copyright/);
+    assert.equal(await extractArticle(`${base}/pdf`), '');
+    assert.equal(await extractArticle('file:///etc/passwd'), '');
+  } finally { server.close(); }
+});
+
+test('llm: summarizeItem sends the article, trimmed to the context window', async () => {
+  let seen;
+  const { server, base } = await listen((req, res) => {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      seen = JSON.parse(body);
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+      res.end(JSON.stringify({ message: { content: '- point one\n- point two' } }) + '\n' + JSON.stringify({ done: true }) + '\n');
+    });
+  });
+  try {
+    const cfg = { provider: 'ollama', model: 'm', baseURL: base, numCtx: 2048, timeoutMs: 5000 };
+    const item = { title: 'T', sourceName: 'S', publishedAt: '2026-01-01', description: 'teaser' };
+    const progress = [];
+    const out = await llm.summarizeItem(cfg, item, 'word '.repeat(20000), { onProgress: (n, t) => progress.push(t) });
+    assert.equal(out.markdown, '- point one\n- point two');
+    assert.match(seen.messages[1].content, /^Title: T\nSource: S/);
+    assert.ok(seen.messages[1].content.length < 6000, 'article cut to fit a 2048-token window');
+    assert.equal(seen.options.num_ctx, 2048);
+    assert.ok(progress.at(-1).includes('point two'));
+
+    await llm.summarizeItem(cfg, item, '');
+    assert.match(seen.messages[1].content, /teaser$/, 'falls back to the feed teaser');
   } finally { server.close(); }
 });

@@ -16,6 +16,8 @@ const EXTENSION_DIR = path.join(DATA_DIR, 'extension');
 const READ_FILE   = path.join(DATA_DIR, 'read.json');
 const HEALTH_FILE = path.join(DATA_DIR, 'health.json');
 const AIDIGEST_FILE = path.join(DATA_DIR, 'ai-digest.json');
+const SAVED_FILE  = path.join(DATA_DIR, 'saved.json');
+const SUMMARIES_FILE = path.join(DATA_DIR, 'summaries.json');
 
 const DEFAULT_SETTINGS = {
   refreshInterval: 30,
@@ -236,6 +238,8 @@ const categoryOf = s => s.category
   || (s.type === 'web-capture' ? 'Clips' : 'General');
 
 const READ_CAP = 10000;
+const SAVED_CAP = 1000;
+const SUMMARY_CAP = 300;
 
 function deepMerge(defaults, overrides) {
   const result = { ...defaults };
@@ -374,45 +378,108 @@ class Storage {
 
   async saveContent(sourceId, items) { this._write(path.join(CONTENT_DIR, `${sourceId}.json`), items, false); }
 
-  // Enabled sources with their visible items: global + per-source mute words
-  // applied, and each item stamped with its source's *current* name/type/category
-  // (so renames and re-categorising take effect without re-fetching).
+  // An item as the UI sees it: stamped with its source's *current* name/type/category
+  // (so renames and re-categorising take effect without re-fetching), plus read/saved flags.
+  // A saved item whose source was deleted keeps the values it was saved with.
+  _stamp(it, source, read, saved) {
+    return {
+      ...it,
+      sourceName: source ? source.name : it.sourceName,
+      sourceType: source ? (source.type === 'rss' && it.sourceType === 'podcast' ? 'podcast' : source.type) : it.sourceType,
+      category: source ? source.category : (it.category || 'Saved'),
+      read: read.has(it.id),
+      saved: saved.has(it.id)
+    };
+  }
+
+  // Enabled sources with their visible items (global + per-source mute words applied).
   _snapshot() {
     const mute = (this.getSettingsSync().muteWords || []).map(w => String(w).toLowerCase().trim()).filter(Boolean);
     const read = this._readSet();
+    const saved = this._savedSet();
     return this._sources().filter(s => s.enabled).map(source => {
       const muted = mute.length && !source.ignoreMute
         ? it => { const text = `${it.title || ''} ${it.description || ''}`.toLowerCase(); return mute.some(w => text.includes(w)); }
         : () => false;
       const items = [];
-      for (const it of this._content(source.id)) {
-        if (muted(it)) continue;
-        items.push({
-          ...it,
-          sourceName: source.name,
-          sourceType: source.type === 'rss' && it.sourceType === 'podcast' ? 'podcast' : source.type,
-          category: source.category,
-          read: read.has(it.id)
-        });
-      }
+      for (const it of this._content(source.id)) if (!muted(it)) items.push(this._stamp(it, source, read, saved));
       return { source, items };
     });
+  }
+
+  // ─── Saved stories ────────────────────────────────────────────────────────────
+  // A saved story is stored as a full snapshot, so it outlives retention pruning
+  // and deleting its source.
+  _saved() { return this._read(SAVED_FILE, []); }
+
+  _savedSet() {
+    const arr = this._saved();
+    if (this._memo.savedArr !== arr) {
+      this._memo.savedArr = arr;
+      this._memo.savedSet = new Set(arr.map(i => i.id));
+    }
+    return this._memo.savedSet;
+  }
+
+  _findItem(id) {
+    for (const s of this._sources()) {
+      const it = this._content(s.id).find(i => i.id === id);
+      if (it) return it;
+    }
+    return null;
+  }
+
+  /** A story by id — from the live cache, else from saved snapshots. */
+  async getItem(id) { return this._findItem(id) || this._saved().find(i => i.id === id) || null; }
+
+  /** @returns {boolean} whether the story is saved afterwards */
+  async setSaved(id, saved) {
+    const list = this._saved();
+    const has = list.some(i => i.id === id);
+    if (!saved) {
+      if (has) this._write(SAVED_FILE, list.filter(i => i.id !== id), false);
+      return false;
+    }
+    if (has) return true;
+    const item = this._findItem(id);
+    if (!item) throw new Error('Story not found — it may have been pruned already.');
+    this._write(SAVED_FILE, [{ ...item, savedAt: new Date().toISOString() }, ...list].slice(0, SAVED_CAP), false);
+    return true;
+  }
+
+  // ─── AI story summaries (cached so reopening a story is instant) ─────────────
+  async getSummary(id) { return this._read(SUMMARIES_FILE, {})[id] || null; }
+
+  async saveSummary(id, data) {
+    const all = { ...this._read(SUMMARIES_FILE, {}) };
+    delete all[id]; // re-insert at the end: oldest entries are trimmed first
+    all[id] = data;
+    for (const key of Object.keys(all).slice(0, Math.max(0, Object.keys(all).length - SUMMARY_CAP))) delete all[key];
+    this._write(SUMMARIES_FILE, all, false);
   }
 
   /**
    * Read model for the news view, tray popup, digest and LLM: filter, search,
    * sort, dedupe and page here so the renderer never holds the whole corpus.
-   * @param {{ sourceId?, category?, type?, unreadOnly?, search?, sort?: 'newest'|'oldest'|'source', limit?, offset? }} q
+   * @param {{ sourceId?, category?, type?, saved?, unreadOnly?, search?, sort?: 'newest'|'oldest'|'source', limit?, offset? }} q
    * @returns {{ items: object[], total: number }}
    */
   async queryContent(q = {}) {
-    const { sourceId, category, type, unreadOnly, search, sort = 'newest', limit, offset = 0 } = q;
+    const { sourceId, category, type, saved, unreadOnly, search, sort = 'newest', limit, offset = 0 } = q;
     const terms = String(search || '').toLowerCase().split(/\s+/).filter(Boolean);
 
-    let items = this._snapshot()
-      .filter(({ source }) => (!sourceId || source.id === sourceId) && (!category || source.category === category))
-      .flatMap(g => g.items)
-      .sort(newestFirst);
+    let items;
+    if (saved) { // most recently saved first; not muted, not deduped, whatever the source's state
+      const byId = new Map(this._sources().map(s => [s.id, s]));
+      const read = this._readSet();
+      const set = this._savedSet();
+      items = this._saved().map(it => this._stamp(it, byId.get(it.sourceId), read, set));
+    } else {
+      items = this._snapshot()
+        .filter(({ source }) => (!sourceId || source.id === sourceId) && (!category || source.category === category))
+        .flatMap(g => g.items)
+        .sort(newestFirst);
+    }
 
     if (type) items = items.filter(i => i.sourceType === type);
     if (unreadOnly) items = items.filter(i => !i.read);
@@ -422,7 +489,7 @@ class Storage {
         return terms.every(t => hay.includes(t));
       });
     }
-    if (!sourceId) items = dedupe(items); // one source is shown whole; every wider view is one story per URL
+    if (!sourceId && !saved) items = dedupe(items); // one source is shown whole; every wider view is one story per URL
     if (sort === 'oldest') items.reverse();
     else if (sort === 'source') items.sort((a, b) => a.sourceName.localeCompare(b.sourceName) || newestFirst(a, b));
 
@@ -460,7 +527,14 @@ class Storage {
         }))
       };
     });
-    return { ...counts(everything.sort(newestFirst)), categories: tree };
+    const read = this._readSet();
+    const saved = this._saved();
+    return {
+      ...counts(everything.sort(newestFirst)),
+      saved: saved.length,
+      savedUnread: saved.filter(i => !read.has(i.id)).length,
+      categories: tree
+    };
   }
 
   // ─── Output ───────────────────────────────────────────────────────────────────
@@ -573,7 +647,7 @@ class Storage {
   // ─── Backup ───────────────────────────────────────────────────────────────────
   async exportBackup() {
     return JSON.stringify(
-      { version: '1.0', exportedAt: new Date().toISOString(), sources: this._sources(), settings: this.getSettingsSync() },
+      { version: '1.0', exportedAt: new Date().toISOString(), sources: this._sources(), settings: this.getSettingsSync(), saved: this._saved() },
       null, 2
     );
   }
@@ -585,6 +659,7 @@ class Storage {
     }
     this._write(SOURCES_FILE, bundle.sources);
     this._write(SETTINGS_FILE, bundle.settings);
+    if (Array.isArray(bundle.saved)) this._write(SAVED_FILE, bundle.saved, false);
   }
 
   // ─── Internal ────────────────────────────────────────────────────────────────

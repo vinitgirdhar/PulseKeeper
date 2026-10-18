@@ -82,6 +82,8 @@
     cpu:       '<rect x="6.5" y="6.5" width="11" height="11" rx="2"/><rect x="10" y="10" width="4" height="4" rx="0.8"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/>',
     cloud:     '<path d="M7.5 18.5a4.5 4.5 0 0 1-.7-8.95 5.5 5.5 0 0 1 10.6 1.45A3.8 3.8 0 0 1 17 18.5z"/>',
     palette:   '<path d="M12 4a8 8 0 1 0 0 16c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.8-.4-1.2-.3-.4-.4-.7-.4-1.1 0-.9.8-1.5 1.7-1.5H17a3 3 0 0 0 3-3C20 7 16.4 4 12 4z"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="11" cy="7.8" r="1" fill="currentColor" stroke="none"/><circle cx="15.2" cy="8.6" r="1" fill="currentColor" stroke="none"/>',
+    bookmark:  '<path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-4-6 4V5.5a1 1 0 0 1 1-1z"/>',
+    bookmarkfill: '<path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-4-6 4V5.5a1 1 0 0 1 1-1z" fill="currentColor"/>',
     sliders:   '<path d="M5 8h9M18 8h1M5 16h1M10 16h9"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>',
 
     // ── Status ──

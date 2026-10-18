@@ -40,6 +40,12 @@ const App = {
     App.updateNav();
   },
 
+  /** Is a model configured well enough to summarize? (cloud needs a key; Ollama / custom don't) */
+  llmReady() {
+    const c = readLLMForm();
+    return !!c.enabled && (LOCAL.has(c.provider) || !!c.apiKey);
+  },
+
   async refreshAll() {
     if (collecting) return;
     try {

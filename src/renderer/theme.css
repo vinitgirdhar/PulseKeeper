@@ -161,6 +161,8 @@ html.scrolling ::-webkit-scrollbar-thumb { background: var(--fill-strong); backg
 .btn .pk-icon { width: 15px; height: 15px; }
 .btn-primary { color: var(--accent-text); background: var(--accent); box-shadow: var(--shadow-sm); }
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.btn-tint { color: var(--accent); background: var(--sel); }
+.btn-tint:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .btn-ghost { background: transparent; }
 .btn-ghost:hover { background: var(--hover); }
 .btn-danger { color: var(--red); }
