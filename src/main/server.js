@@ -5,6 +5,7 @@
 
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
+const { httpUrl } = require('./util');
 
 const PORT = 7828;
 const CAPTURE_SOURCE_NAME = 'Browser Captures';
@@ -13,7 +14,6 @@ class CaptureServer {
   constructor(storage) {
     this.storage = storage;
     this._server = null;
-    this._captureSourceId = null;
   }
 
   start() {
@@ -55,6 +55,12 @@ class CaptureServer {
     }
 
     if (req.method === 'POST' && req.url === '/capture') {
+      // Only the browser extension may write: a random web page can reach 127.0.0.1 too.
+      if (!/^(chrome|moz|safari-web)-extension:\/\//.test(req.headers.origin || '')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Captures are only accepted from the PulseKeeper extension' }));
+        return;
+      }
       let body = '';
       req.on('data', chunk => { body += chunk; if (body.length > 100000) req.destroy(); });
       req.on('end', async () => {
@@ -76,7 +82,7 @@ class CaptureServer {
 
   async _handleCapture(data) {
     const { url, title, content, selection, type = 'page' } = data;
-    if (!url) throw new Error('url is required');
+    if (!httpUrl(url)) throw new Error('a http(s) url is required');
 
     // Lazily create/find the Browser Captures source
     const sourceId = await this._getCaptureSourceId();
@@ -102,24 +108,12 @@ class CaptureServer {
     return item;
   }
 
+  // Looked up every time: the user may have deleted the source since the last capture.
   async _getCaptureSourceId() {
-    if (this._captureSourceId) return this._captureSourceId;
-
     const sources = await this.storage.getSources();
-    let source = sources.find(s => s.name === CAPTURE_SOURCE_NAME && s.type === 'web-capture');
-
-    if (!source) {
-      source = await this.storage.addSource({
-        name: CAPTURE_SOURCE_NAME,
-        type: 'web-capture',
-        enabled: true,
-        config: {},
-        maxItems: 500
-      });
-    }
-
-    this._captureSourceId = source.id;
-    return this._captureSourceId;
+    const source = sources.find(s => s.name === CAPTURE_SOURCE_NAME && s.type === 'web-capture')
+      || await this.storage.addSource({ name: CAPTURE_SOURCE_NAME, type: 'web-capture', enabled: true, config: {}, maxItems: 500 });
+    return source.id;
   }
 }
 

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
+const { canonicalUrl } = require('./util');
 
 const DATA_DIR    = path.join(os.homedir(), 'Documents', 'PulseKeeper');
 const SOURCES_FILE  = path.join(DATA_DIR, 'sources.json');
@@ -15,6 +16,8 @@ const EXTENSION_DIR = path.join(DATA_DIR, 'extension');
 const READ_FILE   = path.join(DATA_DIR, 'read.json');
 const HEALTH_FILE = path.join(DATA_DIR, 'health.json');
 const AIDIGEST_FILE = path.join(DATA_DIR, 'ai-digest.json');
+const SAVED_FILE  = path.join(DATA_DIR, 'saved.json');
+const SUMMARIES_FILE = path.join(DATA_DIR, 'summaries.json');
 
 const DEFAULT_SETTINGS = {
   refreshInterval: 30,
@@ -36,20 +39,18 @@ const DEFAULT_SETTINGS = {
   llm: {
     enabled: false,
     provider: 'anthropic',
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5-5',
     apiKey: '',
     baseURL: '',
     timeoutMs: 900000,     // 15 min — slow local CPU models need lots of headroom
+    numCtx: 8192,          // Ollama context window (tokens); also bounds how much content is sent
     maxItems: 50,          // how many items to summarize; lower = much faster locally
     generateDigest: true,
     digestPrompt: 'Summarize the following content items into a concise daily digest with key highlights and insights:'
   },
   display: {
     theme: 'dark',
-    accentColor: '#0078d4',
-    showThumbnails: true,
-    groupBySource: false,
-    sortBy: 'date',
+    accentColor: 'blue',   // blue | purple | pink | red | orange | green | graphite
     digestFontSize: 'medium'
   },
   notifications: {
@@ -230,6 +231,16 @@ const DEFAULT_SOURCES = [
   }
 ];
 
+// Curated seed sources carry a seedId prefix that doubles as their category.
+const SEED_CATEGORIES = { cyber: 'Cybersecurity', sequretek: 'Sequretek', ai: 'AI' };
+const categoryOf = s => s.category
+  || SEED_CATEGORIES[(s.seedId || '').split('-')[0]]
+  || (s.type === 'web-capture' ? 'Clips' : 'General');
+
+const READ_CAP = 10000;
+const SAVED_CAP = 1000;
+const SUMMARY_CAP = 300;
+
 function deepMerge(defaults, overrides) {
   const result = { ...defaults };
   for (const key of Object.keys(overrides)) {
@@ -243,122 +254,287 @@ function deepMerge(defaults, overrides) {
   return result;
 }
 
+const ts = it => Date.parse(it.publishedAt) || Date.parse(it.fetchedAt) || 0;
+const newestFirst = (a, b) => ts(b) - ts(a);
+
+// One story per canonical URL — the first (newest) copy wins.
+function dedupe(items) {
+  const seen = new Set();
+  return items.filter(it => {
+    const key = it.url ? canonicalUrl(it.url) : it.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/*
+ * File-backed store. Every read-modify-write below is fully synchronous (no
+ * `await` between the read and the write), so concurrent callers — parallel
+ * collectors, IPC handlers, the capture server — can never interleave and lose
+ * an update. The async public methods are thin wrappers kept for API stability.
+ *
+ * Reads are cached by (mtime, size): re-parsing only happens when a file
+ * actually changed, including edits made by external tools (pk-bridge, a text
+ * editor). Cached values are shared — treat them as immutable.
+ */
 class Storage {
   constructor() {
-    this._lock = false;
+    this._cache = new Map();
+    this._memo = {};
+    this._quarantined = new Set();
   }
 
   async init() {
     for (const dir of [DATA_DIR, CONTENT_DIR, OUTPUT_DIR, HISTORY_DIR, EXTENSION_DIR]) {
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true });
     }
-    if (!fs.existsSync(SETTINGS_FILE)) await this._write(SETTINGS_FILE, DEFAULT_SETTINGS);
-    if (!fs.existsSync(SOURCES_FILE))  await this._write(SOURCES_FILE, DEFAULT_SOURCES);
-    await this._seedCuratedSources();
+    if (!fs.existsSync(SETTINGS_FILE)) this._write(SETTINGS_FILE, DEFAULT_SETTINGS);
+    if (!fs.existsSync(SOURCES_FILE))  this._write(SOURCES_FILE, DEFAULT_SOURCES);
+    this._seedCuratedSources();
   }
 
   // Add curated default sources (cybersecurity / Sequretek / AI) to existing
   // installs exactly once. Sources carry a stable `seedId`; once a seedId has
   // been seeded it's never re-added, so deleting one won't bring it back.
-  async _seedCuratedSources() {
+  _seedCuratedSources() {
     const curated = DEFAULT_SOURCES.filter(s => s.seedId);
-    if (!curated.length) return;
-    const settings = await this.getSettings();
+    const settings = this.getSettingsSync();
     const seeded = new Set(settings.seededSourceIds || []);
-    const sources = await this.getSources();
+    const sources = [...this._sources()];
     const present = new Set(sources.filter(s => s.seedId).map(s => s.seedId));
     let changed = false;
     for (const def of curated) {
-      if (present.has(def.seedId)) {           // already in sources.json (fresh install)
+      if (present.has(def.seedId) || seeded.has(def.seedId)) {
+        // already in sources.json (fresh install), or seeded before and removed by the user
         if (!seeded.has(def.seedId)) { seeded.add(def.seedId); changed = true; }
         continue;
       }
-      if (seeded.has(def.seedId)) continue;    // seeded before, user removed it — leave it gone
       sources.push({ ...def, id: uuidv4() });
       seeded.add(def.seedId);
       changed = true;
     }
     if (changed) {
-      await this.saveSources(sources);
-      settings.seededSourceIds = [...seeded];
-      await this.saveSettings(settings);
+      this._write(SOURCES_FILE, sources);
+      this._write(SETTINGS_FILE, { ...settings, seededSourceIds: [...seeded] });
     }
   }
 
   // ─── Settings ────────────────────────────────────────────────────────────────
-  async getSettings() {
-    try {
-      const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
-      return deepMerge(DEFAULT_SETTINGS, JSON.parse(raw));
-    } catch {
-      return deepMerge({}, DEFAULT_SETTINGS);
+  getSettingsSync() {
+    const raw = this._read(SETTINGS_FILE, {});
+    if (this._memo.settingsRaw !== raw) {
+      this._memo.settingsRaw = raw;
+      this._memo.settings = deepMerge(DEFAULT_SETTINGS, raw);
     }
+    return structuredClone(this._memo.settings);
   }
 
-  async saveSettings(settings) {
-    await this._write(SETTINGS_FILE, settings);
-  }
+  async getSettings() { return this.getSettingsSync(); }
+
+  async saveSettings(settings) { this._write(SETTINGS_FILE, settings); }
 
   // ─── Sources ─────────────────────────────────────────────────────────────────
-  async getSources() {
-    try {
-      const raw = fs.readFileSync(SOURCES_FILE, 'utf8');
-      return JSON.parse(raw);
-    } catch { return []; }
+  _sources() {
+    const raw = this._read(SOURCES_FILE, []);
+    if (this._memo.sourcesRaw !== raw) {
+      this._memo.sourcesRaw = raw;
+      this._memo.sources = raw.map(s => ({ ...s, category: categoryOf(s) }));
+    }
+    return this._memo.sources;
   }
 
-  async saveSources(sources) {
-    await this._write(SOURCES_FILE, sources);
-  }
+  async getSources() { return structuredClone(this._sources()); }
+
+  async saveSources(sources) { this._write(SOURCES_FILE, sources); }
 
   async addSource(source) {
-    const sources = await this.getSources();
-    const newSource = { id: uuidv4(), enabled: true, maxItems: 20, ...source };
-    sources.push(newSource);
-    await this.saveSources(sources);
-    return newSource;
+    const maxItems = this.getSettingsSync().maxItemsPerSource || 20;
+    const newSource = { id: uuidv4(), enabled: true, maxItems, ...source };
+    this._write(SOURCES_FILE, [...this._sources(), newSource]);
+    return { ...newSource, category: categoryOf(newSource) };
   }
 
   async updateSource(id, updates) {
-    const sources = await this.getSources();
-    const idx = sources.findIndex(s => s.id === id);
-    if (idx === -1) throw new Error(`Source ${id} not found`);
-    sources[idx] = { ...sources[idx], ...updates };
-    await this.saveSources(sources);
-    return sources[idx];
+    const sources = this._sources();
+    if (!sources.some(s => s.id === id)) throw new Error(`Source ${id} not found`);
+    const next = sources.map(s => (s.id === id ? { ...s, ...updates, id } : s));
+    this._write(SOURCES_FILE, next);
+    return next.find(s => s.id === id);
   }
 
   async deleteSource(id) {
-    let sources = await this.getSources();
-    sources = sources.filter(s => s.id !== id);
-    await this.saveSources(sources);
-    const contentFile = path.join(CONTENT_DIR, `${id}.json`);
-    if (fs.existsSync(contentFile)) fs.unlinkSync(contentFile);
-    // Clean up health entry
-    const health = await this.getSourceHealth();
+    this._write(SOURCES_FILE, this._sources().filter(s => s.id !== id));
+    fs.rmSync(path.join(CONTENT_DIR, `${id}.json`), { force: true });
+    const health = { ...this._read(HEALTH_FILE, {}) };
     delete health[id];
-    await this._write(HEALTH_FILE, health);
+    this._write(HEALTH_FILE, health);
   }
 
   // ─── Content Cache ────────────────────────────────────────────────────────────
-  async getContent(sourceId) {
-    const file = path.join(CONTENT_DIR, `${sourceId}.json`);
-    try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-    catch { return []; }
+  _content(sourceId) { return this._read(path.join(CONTENT_DIR, `${sourceId}.json`), []); }
+
+  async getContent(sourceId) { return this._content(sourceId); }
+
+  async saveContent(sourceId, items) { this._write(path.join(CONTENT_DIR, `${sourceId}.json`), items, false); }
+
+  // An item as the UI sees it: stamped with its source's *current* name/type/category
+  // (so renames and re-categorising take effect without re-fetching), plus read/saved flags.
+  // A saved item whose source was deleted keeps the values it was saved with.
+  _stamp(it, source, read, saved) {
+    return {
+      ...it,
+      sourceName: source ? source.name : it.sourceName,
+      sourceType: source ? (source.type === 'rss' && it.sourceType === 'podcast' ? 'podcast' : source.type) : it.sourceType,
+      category: source ? source.category : (it.category || 'Saved'),
+      read: read.has(it.id),
+      saved: saved.has(it.id)
+    };
   }
 
-  async saveContent(sourceId, items) {
-    await this._write(path.join(CONTENT_DIR, `${sourceId}.json`), items);
+  // Enabled sources with their visible items (global + per-source mute words applied).
+  _snapshot() {
+    const mute = (this.getSettingsSync().muteWords || []).map(w => String(w).toLowerCase().trim()).filter(Boolean);
+    const read = this._readSet();
+    const saved = this._savedSet();
+    return this._sources().filter(s => s.enabled).map(source => {
+      const muted = mute.length && !source.ignoreMute
+        ? it => { const text = `${it.title || ''} ${it.description || ''}`.toLowerCase(); return mute.some(w => text.includes(w)); }
+        : () => false;
+      const items = [];
+      for (const it of this._content(source.id)) if (!muted(it)) items.push(this._stamp(it, source, read, saved));
+      return { source, items };
+    });
   }
 
-  async getAllContent() {
-    const sources = await this.getSources();
-    const allItems = [];
-    for (const source of sources.filter(s => s.enabled)) {
-      allItems.push(...(await this.getContent(source.id)));
+  // ─── Saved stories ────────────────────────────────────────────────────────────
+  // A saved story is stored as a full snapshot, so it outlives retention pruning
+  // and deleting its source.
+  _saved() { return this._read(SAVED_FILE, []); }
+
+  _savedSet() {
+    const arr = this._saved();
+    if (this._memo.savedArr !== arr) {
+      this._memo.savedArr = arr;
+      this._memo.savedSet = new Set(arr.map(i => i.id));
     }
-    allItems.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-    return allItems;
+    return this._memo.savedSet;
+  }
+
+  _findItem(id) {
+    for (const s of this._sources()) {
+      const it = this._content(s.id).find(i => i.id === id);
+      if (it) return it;
+    }
+    return null;
+  }
+
+  /** A story by id — from the live cache, else from saved snapshots. */
+  async getItem(id) { return this._findItem(id) || this._saved().find(i => i.id === id) || null; }
+
+  /** @returns {boolean} whether the story is saved afterwards */
+  async setSaved(id, saved) {
+    const list = this._saved();
+    const has = list.some(i => i.id === id);
+    if (!saved) {
+      if (has) this._write(SAVED_FILE, list.filter(i => i.id !== id), false);
+      return false;
+    }
+    if (has) return true;
+    const item = this._findItem(id);
+    if (!item) throw new Error('Story not found — it may have been pruned already.');
+    this._write(SAVED_FILE, [{ ...item, savedAt: new Date().toISOString() }, ...list].slice(0, SAVED_CAP), false);
+    return true;
+  }
+
+  // ─── AI story summaries (cached so reopening a story is instant) ─────────────
+  async getSummary(id) { return this._read(SUMMARIES_FILE, {})[id] || null; }
+
+  async saveSummary(id, data) {
+    const all = { ...this._read(SUMMARIES_FILE, {}) };
+    delete all[id]; // re-insert at the end: oldest entries are trimmed first
+    all[id] = data;
+    for (const key of Object.keys(all).slice(0, Math.max(0, Object.keys(all).length - SUMMARY_CAP))) delete all[key];
+    this._write(SUMMARIES_FILE, all, false);
+  }
+
+  /**
+   * Read model for the news view, tray popup, digest and LLM: filter, search,
+   * sort, dedupe and page here so the renderer never holds the whole corpus.
+   * @param {{ sourceId?, category?, type?, saved?, unreadOnly?, search?, sort?: 'newest'|'oldest'|'source', limit?, offset? }} q
+   * @returns {{ items: object[], total: number }}
+   */
+  async queryContent(q = {}) {
+    const { sourceId, category, type, saved, unreadOnly, search, sort = 'newest', limit, offset = 0 } = q;
+    const terms = String(search || '').toLowerCase().split(/\s+/).filter(Boolean);
+
+    let items;
+    if (saved) { // most recently saved first; not muted, not deduped, whatever the source's state
+      const byId = new Map(this._sources().map(s => [s.id, s]));
+      const read = this._readSet();
+      const set = this._savedSet();
+      items = this._saved().map(it => this._stamp(it, byId.get(it.sourceId), read, set));
+    } else {
+      items = this._snapshot()
+        .filter(({ source }) => (!sourceId || source.id === sourceId) && (!category || source.category === category))
+        .flatMap(g => g.items)
+        .sort(newestFirst);
+    }
+
+    if (type) items = items.filter(i => i.sourceType === type);
+    if (unreadOnly) items = items.filter(i => !i.read);
+    if (terms.length) {
+      items = items.filter(i => {
+        const hay = `${i.title} ${i.description} ${i.sourceName} ${i.author}`.toLowerCase();
+        return terms.every(t => hay.includes(t));
+      });
+    }
+    if (!sourceId && !saved) items = dedupe(items); // one source is shown whole; every wider view is one story per URL
+    if (sort === 'oldest') items.reverse();
+    else if (sort === 'source') items.sort((a, b) => a.sourceName.localeCompare(b.sourceName) || newestFirst(a, b));
+
+    const total = items.length;
+    return { items: limit ? items.slice(offset, offset + limit) : items.slice(offset), total };
+  }
+
+  async getAllContent() { return (await this.queryContent()).items; }
+
+  /**
+   * Navigation tree for the news sidebar: categories → sources, with totals and
+   * unread counts that match exactly what queryContent returns for each node.
+   */
+  async getChannels() {
+    const health = this._read(HEALTH_FILE, {});
+    const unreadOf = list => list.reduce((n, i) => n + (i.read ? 0 : 1), 0);
+    // Same rule as queryContent: filter first, then one story per URL.
+    const counts = sorted => ({ total: dedupe(sorted).length, unread: dedupe(sorted.filter(i => !i.read)).length });
+    const categories = new Map();
+    for (const { source, items } of this._snapshot()) {
+      if (!categories.has(source.category)) categories.set(source.category, { name: source.category, groups: [] });
+      categories.get(source.category).groups.push({ source, items });
+    }
+
+    const everything = [];
+    const tree = [...categories.values()].map(c => {
+      const items = c.groups.flatMap(g => g.items);
+      everything.push(...items);
+      return {
+        name: c.name,
+        ...counts(items.sort(newestFirst)),
+        sources: c.groups.map(({ source, items }) => ({
+          id: source.id, name: source.name, type: source.type, total: items.length, unread: unreadOf(items),
+          error: health[source.id]?.lastError || null
+        }))
+      };
+    });
+    const read = this._readSet();
+    const saved = this._saved();
+    return {
+      ...counts(everything.sort(newestFirst)),
+      saved: saved.length,
+      savedUnread: saved.filter(i => !read.has(i.id)).length,
+      categories: tree
+    };
   }
 
   // ─── Output ───────────────────────────────────────────────────────────────────
@@ -369,8 +545,7 @@ class Storage {
 
   async saveOutput(format, content) {
     const file = this.getOutputPath(format);
-    if (Buffer.isBuffer(content)) fs.writeFileSync(file, content);
-    else fs.writeFileSync(file, content, 'utf8');
+    fs.writeFileSync(file, content, Buffer.isBuffer(content) ? undefined : 'utf8');
     // Also save a timestamped copy to history
     await this.saveHistory(format, content);
     return file;
@@ -385,25 +560,18 @@ class Storage {
   // The AI summary is expensive (a slow local model can take minutes), so it's
   // generated on a schedule and cached here. Opening the digest reads this cache
   // instead of re-calling the model every time.
-  async getAIDigest() {
-    try { return JSON.parse(fs.readFileSync(AIDIGEST_FILE, 'utf8')); }
-    catch { return null; }
-  }
+  async getAIDigest() { return this._read(AIDIGEST_FILE, null); }
 
-  async saveAIDigest(data) {
-    await this._write(AIDIGEST_FILE, { generatedAt: new Date().toISOString(), ...data });
-  }
+  async saveAIDigest(data) { this._write(AIDIGEST_FILE, { generatedAt: new Date().toISOString(), ...data }); }
 
   // ─── Digest History ───────────────────────────────────────────────────────────
   async saveHistory(format, content) {
-    if (!fs.existsSync(HISTORY_DIR)) fs.mkdirSync(HISTORY_DIR, { recursive: true });
+    fs.mkdirSync(HISTORY_DIR, { recursive: true });
     const stamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
     const ext = format === 'markdown' ? 'md' : format;
     const file = path.join(HISTORY_DIR, `digest-${stamp}.${ext}`);
-    if (Buffer.isBuffer(content)) fs.writeFileSync(file, content);
-    else fs.writeFileSync(file, content, 'utf8');
-    const settings = await this.getSettings();
-    await this._pruneHistory(settings.historyMaxCount || 10);
+    fs.writeFileSync(file, content, Buffer.isBuffer(content) ? undefined : 'utf8');
+    this._pruneHistory(this.getSettingsSync().historyMaxCount || 10);
     return file;
   }
 
@@ -423,7 +591,7 @@ class Storage {
       });
   }
 
-  async _pruneHistory(maxCount) {
+  _pruneHistory(maxCount) {
     if (!fs.existsSync(HISTORY_DIR)) return;
     const files = fs.readdirSync(HISTORY_DIR)
       .filter(f => f.endsWith('.html') && f.startsWith('digest-'))
@@ -434,57 +602,91 @@ class Storage {
   }
 
   // ─── Read Tracking ────────────────────────────────────────────────────────────
-  async getReadIds() {
-    try { return new Set(JSON.parse(fs.readFileSync(READ_FILE, 'utf8'))); }
-    catch { return new Set(); }
+  _readSet() {
+    const arr = this._read(READ_FILE, []);
+    if (this._memo.readArr !== arr) {
+      this._memo.readArr = arr;
+      this._memo.readSet = new Set(arr);
+    }
+    return this._memo.readSet;
+  }
+
+  async getReadIds() { return new Set(this._readSet()); }
+
+  // The same story syndicated by two sources is one story: reading either copy reads both.
+  _withDuplicates(ids) {
+    const wanted = new Set(Array.isArray(ids) ? ids : [ids]);
+    const all = this._sources().flatMap(s => this._content(s.id));
+    const urls = new Set(all.filter(it => it.url && wanted.has(it.id)).map(it => canonicalUrl(it.url)));
+    for (const it of all) if (it.url && urls.has(canonicalUrl(it.url))) wanted.add(it.id);
+    return wanted;
   }
 
   async markRead(ids) {
-    const existing = await this.getReadIds();
-    for (const id of (Array.isArray(ids) ? ids : [ids])) existing.add(id);
-    await this._write(READ_FILE, [...existing].slice(-10000));
+    const set = new Set(this._readSet());
+    for (const id of this._withDuplicates(ids)) set.add(id);
+    this._write(READ_FILE, [...set].slice(-READ_CAP), false);
   }
 
-  async markAllRead(itemIds) {
-    const existing = await this.getReadIds();
-    for (const id of itemIds) existing.add(id);
-    await this._write(READ_FILE, [...existing].slice(-10000));
+  async markUnread(ids) {
+    const set = new Set(this._readSet());
+    for (const id of this._withDuplicates(ids)) set.delete(id);
+    this._write(READ_FILE, [...set], false);
   }
+
+  async markAllRead(itemIds) { return this.markRead(itemIds); }
 
   // ─── Source Health ────────────────────────────────────────────────────────────
-  async getSourceHealth() {
-    try { return JSON.parse(fs.readFileSync(HEALTH_FILE, 'utf8')); }
-    catch { return {}; }
-  }
+  async getSourceHealth() { return this._read(HEALTH_FILE, {}); }
 
   async updateSourceHealth(sourceId, data) {
-    const health = await this.getSourceHealth();
-    health[sourceId] = { ...(health[sourceId] || {}), ...data };
-    await this._write(HEALTH_FILE, health);
+    const health = this._read(HEALTH_FILE, {});
+    this._write(HEALTH_FILE, { ...health, [sourceId]: { ...health[sourceId], ...data } });
   }
 
   // ─── Backup ───────────────────────────────────────────────────────────────────
   async exportBackup() {
-    const sources = await this.getSources();
-    const settings = await this.getSettings();
     return JSON.stringify(
-      { version: '1.0', exportedAt: new Date().toISOString(), sources, settings },
+      { version: '1.0', exportedAt: new Date().toISOString(), sources: this._sources(), settings: this.getSettingsSync(), saved: this._saved() },
       null, 2
     );
   }
 
   async importBackup(json) {
     const bundle = JSON.parse(json);
-    if (!bundle.sources || !bundle.settings) throw new Error('Invalid backup file — missing sources or settings');
-    await this.saveSources(bundle.sources);
-    await this.saveSettings(bundle.settings);
+    if (!Array.isArray(bundle.sources) || !bundle.settings || typeof bundle.settings !== 'object') {
+      throw new Error('Invalid backup file — missing sources or settings');
+    }
+    this._write(SOURCES_FILE, bundle.sources);
+    this._write(SETTINGS_FILE, bundle.settings);
+    if (Array.isArray(bundle.saved)) this._write(SAVED_FILE, bundle.saved, false);
   }
 
   // ─── Internal ────────────────────────────────────────────────────────────────
-  async _write(file, data) {
-    const tmp = file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  _read(file, fallback) {
+    try {
+      const st = fs.statSync(file);
+      const hit = this._cache.get(file);
+      if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.data;
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      this._cache.set(file, { mtimeMs: st.mtimeMs, size: st.size, data });
+      return data;
+    } catch (e) {
+      // Unreadable (not just missing): keep a copy so a later save can't destroy a hand-edited file.
+      if (e.code !== 'ENOENT' && !this._quarantined.has(file)) {
+        this._quarantined.add(file);
+        try { fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`); } catch {}
+      }
+      return fallback;
+    }
+  }
+
+  // Atomic: write a temp file, then rename over the target.
+  _write(file, data, pretty = true) {
+    const tmp = `${file}.tmp`;
+    fs.writeFileSync(tmp, pretty ? JSON.stringify(data, null, 2) : JSON.stringify(data), 'utf8');
     fs.renameSync(tmp, file);
+    this._cache.delete(file);
   }
 }
 

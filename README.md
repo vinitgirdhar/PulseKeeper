@@ -1,313 +1,426 @@
+<div align="center">
+
+<img src="assets/icon.svg" width="96" alt="PulseKeeper logo">
+
 # PulseKeeper
 
-**Keep your pulse on the content that matters.**
+**A private news aggregator for Windows — every feed you follow in one calm, fast reader, with optional AI summaries from a cloud model or one running on your own machine.**
 
-PulseKeeper is a Windows 11 system tray app built with Electron and Node.js. It aggregates content from RSS feeds, YouTube channels, Reddit, podcasts, newsletters, blogs, and web pages, then delivers it as a clean digest in HTML, Markdown, or PDF. It also integrates directly with [AgentPlatform](https://github.com/rod-trent/AgentPlatform) for AI-powered summarization.
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4.svg)
+![Electron 41](https://img.shields.io/badge/electron-41-47848f.svg)
+![No API keys needed to collect](https://img.shields.io/badge/collecting-no%20API%20keys-2ea44f.svg)
+
+<br>
+
+<img src="Images/screenshots/news-dark.png" alt="PulseKeeper news view: category sidebar, story list and reader with an AI summary" width="100%">
+
+</div>
 
 ---
 
-## Screenshots
+## Contents
 
-![PulseKeeper](Images/PulseKeeper.png)
-
-![Supported Sources](Images/SupportedSources.png)
-
-![Agent Export](Images/AgentExport.png)
+- [Why PulseKeeper](#why-pulsekeeper)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Getting started](#getting-started)
+- [Using PulseKeeper](#using-pulsekeeper)
+- [Sources](#sources)
+- [AI summaries and digests](#ai-summaries-and-digests)
+- [Browser extension](#browser-extension)
+- [AgentPlatform integration](#agentplatform-integration)
+- [Settings](#settings)
+- [Privacy and security](#privacy-and-security)
+- [How it works](#how-it-works)
+- [Data on disk](#data-on-disk)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Credits and license](#credits-and-license)
 
 ---
+
+## Why PulseKeeper
+
+Following many sources means many tabs, many apps and a lot of noise. PulseKeeper pulls RSS and Atom feeds, blogs, newsletters, podcasts, YouTube channels, subreddits and arbitrary web pages into **one reader**, keeps them fresh in the background, and lives quietly in the system tray until you want it.
+
+- **Your data stays yours.** Everything is stored as plain JSON in your Documents folder. Collecting content needs no account and no API key.
+- **AI is optional and local-friendly.** Summarise a story or a whole day with Anthropic, OpenAI, Gemini, xAI, Groq — or Ollama and any OpenAI-compatible server on your own hardware.
+- **Built to be dependable.** Conditional requests, retries, backoff for broken feeds, atomic writes and a backend test suite keep it fast and quiet.
 
 ## Features
 
-- **System tray app** — lives quietly in the Windows 11 tray; left-click opens the content popup, right-click shows the menu
-- **Multiple source types** — RSS, YouTube, Reddit, Podcasts, Newsletters, Blogs, Web Pages, and Browser Captures
-- **No API keys required** — every source type works without a developer account or credentials
-- **Unread badge** — tray icon shows a red dot with count when new content arrives
-- **Read tracking** — click any item to mark it read; "Mark All Read" button in the popup
-- **Source health monitoring** — each source card shows last fetch time and any errors
-- **RSS auto-discovery** — paste any website URL and PulseKeeper will find the feed
-- **Mute words** — filter out items containing specific words across all sources
-- **Per-source refresh intervals** — override the global schedule for individual sources
-- **Digest history** — last 10 generated digests saved and accessible from the Export tab
-- **Backup & restore** — export/import all sources and settings as a JSON file
-- **Light / dark theme** — toggle in the settings sidebar
-- **CSS selector scraping** — target specific sections of any web page with optional change monitoring
-- **Browser extension** — Chrome/Edge Manifest V3 extension to capture pages, selections, and links directly to PulseKeeper; extension files automatically copied to your data folder on startup
-- **Clipboard export** — copy visible items as formatted Markdown with one click
-- **AI digest generation** — connects to Anthropic, OpenAI, xAI (Grok), Ollama, or any OpenAI-compatible endpoint
-- **AgentPlatform export** — export a ready-to-import agent pack JSON for use with [AgentPlatform](https://github.com/rod-trent/AgentPlatform)
-- **Output formats** — generate digests as styled HTML, Markdown, or PDF
-- **Fluent Design UI** — dark navy/cyan Windows 11 aesthetic throughout
-- **Auto-refresh** — configurable cron schedule keeps sources up to date in the background
+### Read
+- **News aggregator** — one sidebar with *All Stories*, *Saved*, and every **category → source** with live unread counts. Select a category or a single source, then search, filter to unread, and sort by newest, oldest or source.
+- **Reader panel** — open a story beside the list, step with the keyboard, mark read or unread, copy the link, or jump to the original.
+- **Saved stories** — bookmark anything; saved stories are kept even after they age out of the feed or the source is deleted.
+- **AI summary per story** — key points in a few bullets, generated from the full article text when it can be fetched, and cached so reopening is instant.
+- **Day grouping, hero story and thumbnails** — a clean, Apple-News-style layout in light or dark.
+- **No duplicates** — the same article syndicated by several sources appears once and is read once.
+
+### Collect
+- **Eight source types** — RSS/Atom, podcast, YouTube, Reddit, newsletter, blog, web page (CSS-selector scraping) and browser captures.
+- **Smart collection** — parallel fetching, conditional requests (ETag / Last-Modified), automatic retries, and exponential backoff for sources that keep failing.
+- **Feed discovery** — paste any website address and PulseKeeper finds the feed.
+- **OPML import** — bring your whole subscription list; folders become categories.
+- **Muted words** — hide noise everywhere, including stories already collected.
+- **Per-source schedules** — override the global refresh interval for individual sources.
+
+### Summarise
+- **AI digest** — a cached, scheduled summary of everything new, written by the model of your choice.
+- **Local models done properly** — native Ollama support with a configured context window; the digest is trimmed to fit instead of being silently cut off. Model lists come straight from the provider.
+- **Digest outputs** — HTML viewer, Markdown or PDF, with history.
+
+### Everywhere
+- **System-tray app** with an unread badge and a quick-view popup.
+- **Browser extension** (Chrome / Edge) to send pages, selections and links to PulseKeeper.
+- **Health dashboard** showing every source's status, timing and errors.
+- **Apple-style interface** — light, dark or automatic theme, seven accent colours, smooth GSAP motion that respects reduced-motion settings.
+- **AgentPlatform export** and a command-line bridge for automation.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="Images/screenshots/news-light.png" alt="News view in light mode"><br><sub><b>Light mode</b> — hero story, day groups, unread dots</sub></td>
+    <td width="50%"><img src="Images/screenshots/saved-light.png" alt="Saved stories with a purple accent colour"><br><sub><b>Saved</b> — bookmarks that outlive the feed, here with the purple accent</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="Images/screenshots/sources.png" alt="Sources grouped by category"><br><sub><b>Sources</b> — grouped by category with status at a glance</sub></td>
+    <td width="50%"><img src="Images/screenshots/health.png" alt="Health dashboard"><br><sub><b>Health</b> — what is failing, why, and how often it is retried</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="Images/screenshots/ai-models.png" alt="AI and Models settings with Ollama selected"><br><sub><b>AI &amp; Models</b> — cloud providers or a local Ollama server</sub></td>
+    <td width="50%"><img src="Images/screenshots/settings.png" alt="Settings"><br><sub><b>Settings</b> — appearance, collection, digest; saved automatically</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="Images/screenshots/digest-dark.png" alt="HTML digest with an AI summary"><br><sub><b>Digest</b> — AI summary on top, every story below</sub></td>
+    <td width="50%" align="center"><img src="Images/screenshots/popup-dark.png" alt="Tray popup in dark mode" width="46%"> <img src="Images/screenshots/popup-light.png" alt="Tray popup in light mode" width="46%"><br><sub><b>Tray popup</b> — a quick look without opening the app</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots use sample stories so no real publisher content is reproduced.</sub>
 
 ---
 
-## Download
+## Getting started
 
-**[⬇ Download v1.1.0](https://github.com/rod-trent/PulseKeeper/releases/tag/v1.1.0)**
+### Requirements
 
-Download **PulseKeeper-Setup-1.1.0.exe** — a full NSIS installer that creates Start Menu and desktop shortcuts.
+- Windows 10 or 11 (x64)
+- [Node.js](https://nodejs.org/) 22 or later and npm 10 or later — only when running from source
 
-No Node.js installation needed. The Electron runtime and all dependencies are bundled.
+### Run from source
 
----
-
-## Requirements (source / dev only)
-
-- Windows 10 / 11
-- [Node.js](https://nodejs.org/) 18 or later
-- npm 9 or later
-
----
-
-## Getting Started
-
-```bash
-# Clone the repo
-git clone https://github.com/rod-trent/PulseKeeper.git
+```powershell
+git clone https://github.com/vinitgirdhar/PulseKeeper.git
 cd PulseKeeper
-
-# Install dependencies
 npm install
-
-# Generate browser extension icons (run once)
-node extension/generate-icons.js
-
-# Launch the app
 npm start
 ```
 
-The app will appear in your system tray. Left-click the icon to open the content popup; right-click for the menu.
+PulseKeeper starts in the **system tray** (bottom-right of the taskbar, behind the `^` arrow). It has no window on launch.
 
----
+| Tray action | Result |
+|---|---|
+| **Left-click** | Quick-view popup with the latest stories |
+| **Double-click** | Open the digest |
+| **Right-click → Open PulseKeeper** | The main window: news, sources, AI, settings |
+| **Right-click → Refresh Now** | Fetch every source immediately |
 
-## Building a Distributable
+A fresh install comes with a curated set of cybersecurity, AI and general technology sources so there is something to read straight away. Delete or replace them under **Sources**.
 
-```bash
-npm run build
+### Build an installer
+
+```powershell
+npm run build        # NSIS installer + portable exe in dist\
+npm run build:dir    # unpacked app folder, fastest way to test a build
 ```
 
-This produces a Windows NSIS installer in the `dist/` folder via [electron-builder](https://www.electron.build/).
+Binaries are produced with [electron-builder](https://www.electron.build/). Installers are published on the repository's [Releases](https://github.com/vinitgirdhar/PulseKeeper/releases) page when available.
 
 ---
 
-## Source Types
+## Using PulseKeeper
 
-| Type | What you provide | API key? |
+### The sidebar
+
+| Item | What it shows |
+|---|---|
+| **All Stories** | Everything from your enabled sources, newest first |
+| **Saved** | Stories you bookmarked |
+| **Category** (e.g. *Cybersecurity*) | Every source in that category; click the chevron to collapse it |
+| **Source** | Just that source, in full |
+| **Manage** | Sources, Health, AI &amp; Models, Settings, Export, Extension, About |
+
+Numbers beside each item are **unread** counts and update as you read.
+
+### Reading
+
+Click a story to open it in the reader. Opening a story marks it read. Use the toolbar above the list to **sort**, **mark everything in this view as read**, or **refresh**, and the search box and *All / Unread* switch to narrow the list.
+
+| Key | Action |
+|---|---|
+| `J` / `↓` | Next story |
+| `K` / `↑` | Previous story |
+| `Enter` / `O` | Open the original in your browser |
+| `S` | Save or unsave |
+| `M` | Mark read or unread |
+| `/` | Focus search |
+| `Esc` | Close the reader |
+| `Ctrl` + `R` | Refresh all sources |
+| `Ctrl` + `N` | Add a source |
+| `Ctrl` + `E` | Open the digest |
+| `Ctrl` + `,` | Settings |
+
+### Adding sources
+
+**Sources → Add Source** (or `Ctrl`+`N`). Choose a type, paste the address, optionally give it a name and a **category**, and save — PulseKeeper fetches it straight away. For feeds, **Find Feed** discovers the RSS address behind any website. **Import OPML** adds a whole list at once; folders in the file become categories.
+
+### The tray popup
+
+Left-click the tray icon for the latest 100 stories, filterable by category, with search, *mark all read* (with undo) and *copy as Markdown*. The tray icon shows a dot while there is something new.
+
+---
+
+## Sources
+
+| Type | You provide | API key |
 |---|---|---|
 | **RSS / Atom** | Feed URL | No |
-| **Podcast** | Podcast RSS feed URL | No |
-| **YouTube** | Channel URL (`/channel/UCxxxxxx` recommended) or `@handle` | No |
-| **Reddit** | Subreddit name + sort (hot / new / top / rising) | No |
-| **Newsletter** | Feed URL (Substack, Beehiiv, Ghost, etc.) | No |
+| **Podcast** | The show's RSS URL | No |
+| **YouTube** | Channel URL (`/channel/UC…` is most reliable), `@handle` or playlist URL | No |
+| **Reddit** | Subreddit and sort (hot / new / top / rising) | No |
+| **Newsletter** | The newsletter's feed (Substack, Beehiiv, Ghost…) | No |
 | **Blog** | Feed URL | No |
-| **Web Page** | URL + optional CSS selectors for title, link, and content | No |
-| **Web Capture** | Managed by the browser extension — no manual config needed | No |
+| **Web page** | URL plus optional CSS selectors for items, title, link and summary | No |
+| **Browser capture** | Created automatically by the extension | No |
 
-### Notes on specific sources
+<details>
+<summary><b>Notes on specific sources</b></summary>
 
-**YouTube** — The most reliable URL format is `https://www.youtube.com/channel/UCxxxxxx`. Find your channel ID in YouTube Studio → Settings → Channel → Basic Info. `@handle` URLs are also resolved automatically using YouTube's innertube API.
+- **YouTube** — `https://www.youtube.com/channel/UCxxxxxx` never needs a lookup. `@handle` URLs are resolved through YouTube's public endpoints and the result is remembered. Find a channel ID in YouTube Studio → Settings → Channel → Basic info.
+- **Podcast** — paste the public RSS feed; no Spotify or Apple account required. Look on the show's website, [Podchaser](https://podchaser.com) or [Listen Notes](https://listennotes.com).
+- **Reddit** — uses the public RSS feed and falls back to the public JSON listing. No Reddit account needed.
+- **Web page** — with no selector the whole page is one item that is re-published whenever its text changes (a simple change monitor). With a selector each match becomes an item.
+- **Failing sources** — after three consecutive failures a source is retried less often (up to every six hours) so a dead feed is never hammered. *Refresh now* on the source always tries immediately.
 
-**Podcast** — Paste the show's public RSS feed URL. No Spotify account or developer credentials needed. To find a podcast's RSS URL: check the show's website, search on [podchaser.com](https://podchaser.com), or use [Listen Notes](https://listennotes.com).
+</details>
 
-**Reddit** — Uses the public RSS feed for each subreddit. No Reddit account or API key required.
+### How long stories are kept
 
----
-
-## Browser Extension
-
-The browser extension is automatically copied to your PulseKeeper data folder on startup:
-
-```
-%USERPROFILE%\Documents\PulseKeeper\extension\
-```
-
-### Install
-
-1. In PulseKeeper settings, go to the **Extension** tab and click **Open Extension Folder** to open the folder above.
-2. Open **chrome://extensions** (Chrome) or **edge://extensions** (Edge)
-3. Enable **Developer mode**
-4. Click **Load unpacked** and select the folder that opened
-
-### Usage
-
-- Right-click any page → **Send page to PulseKeeper**
-- Right-click a selection → **Send selection to PulseKeeper**
-- Right-click a link → **Send link to PulseKeeper**
-- Click the PulseKeeper toolbar icon to open the extension popup
-
-The extension communicates with the desktop app via a local HTTP server on **port 7828**. The Extension tab in settings shows a live **Capture Server Status** indicator. PulseKeeper must be running for captures to work.
+Stories are kept by **publish date** for the number of days set in Settings → *Keep stories for*. Each source always keeps its newest few stories, so a blog that posts monthly is never empty. **Saved** stories are kept indefinitely.
 
 ---
 
-## Popup Features
+## AI summaries and digests
 
-The tray popup provides a quick view of your latest content:
+AI is entirely optional. Turn it on under **AI &amp; Models**.
 
-- **Filter chips** — filter by source type (RSS, YouTube, Reddit, etc.)
-- **Unread badge** — tray icon count resets when you open the popup
-- **Mark as read** — click any item to open it and mark it read (fades to 50% opacity)
-- **Mark All Read** — ✓ Read button marks everything currently visible
-- **Copy to clipboard** — 📋 button copies all visible items as formatted Markdown
-- **Refresh** — 🔄 button triggers an immediate fetch of all sources
-- **View All** — opens the full HTML digest in your browser
+| Provider | Needs a key | Notes |
+|---|---|---|
+| **Anthropic** (Claude) | Yes | |
+| **OpenAI** | Yes | Reasoning models (o-series, GPT-5) are handled automatically |
+| **Google** (Gemini) | Yes | |
+| **xAI** (Grok) | Yes | |
+| **Groq** | Yes | |
+| **Ollama** | No | Local. Leave the server address empty for this computer, or enter another machine's address |
+| **Custom endpoint** | Optional | Any OpenAI-compatible server — LM Studio, vLLM, LiteLLM, llama.cpp… |
 
----
+API keys are remembered **per provider**, so switching providers does not lose them. Use the refresh button beside *Model* to list the models your account (or your Ollama server) actually offers, and **Test Connection** to verify everything before generating.
 
-## Settings
+### Story summaries
 
-### General
-- Global refresh interval (minutes)
-- Collect on startup toggle
-- Max items per source default
+Open a story and choose **Summarize with AI**. PulseKeeper fetches the article page (best effort), extracts the readable text, and asks the model for three to five bullet points. The summary streams into the reader and is cached, so you only pay for it once; the refresh icon regenerates it. If the page cannot be read, the feed's preview text is used instead and the card says so.
 
-### Source Health
-Each source card in the **Content Sources** tab shows:
-- Last successful fetch time
-- Error message if the last fetch failed
-- Per-source refresh interval override
+### Daily digest
 
-### Mute Words
-Enter words or phrases (one per line) in the **Mute Words** field under Settings. Any content item whose title or description contains a muted word is silently dropped across all sources.
+**Generate Digest** (or a schedule under Settings → *Generate automatically*) summarises your newest stories into one Markdown digest, cached so opening it is instant. The digest is also available as a styled HTML page, Markdown file or PDF from **Export**, and every one is archived in the history.
 
-### Theme
-Click the theme toggle button (☀️ / 🌙) in the settings sidebar to switch between dark (default) and light mode.
+### Running a local model
 
-### Backup & Restore
-Under **Settings → Backup & Restore**:
-- **Export Backup** — saves all sources, settings, and configuration as a single JSON file
-- **Import Backup** — restores from a previously exported backup
+1. Install [Ollama](https://ollama.com) and pull a model, for example `ollama pull llama3.2`.
+2. In **AI &amp; Models** choose **Ollama (Local)**, press the refresh button beside *Model* and pick the model.
+3. Press **Test Connection**.
 
----
+Tips for local models:
 
-## Digest History
-
-Every time you generate a digest, it is automatically saved to:
-
-```
-%USERPROFILE%\Documents\PulseKeeper\history\
-```
-
-The last 10 digests are listed in the **Export** tab with an **Open** button for each. The `historyMaxCount` setting controls how many are kept.
+- **Context window** (default 8192 tokens) is sent to Ollama, and PulseKeeper only packs as many stories as fit, so nothing is silently truncated. Raise it if your hardware allows.
+- **Stories per digest** is the biggest speed lever on CPU — fewer stories means much less to read before the first word.
+- **Request timeout** counts *silence*, not total time: a long generation is never cut off while it is still producing text.
+- Reasoning models that emit `<think>…</think>` have that text removed from the result.
 
 ---
 
-## AgentPlatform Integration
+## Browser extension
 
-PulseKeeper can export an agent pack that runs inside [AgentPlatform](https://github.com/rod-trent/AgentPlatform).
+The Chrome / Edge (Manifest V3) extension sends the current page, a selection or a link to PulseKeeper's **Browser Captures** source.
 
-### Export
+1. In PulseKeeper open **Extension** and choose **Open Extension Folder**. (The files are copied to `%USERPROFILE%\Documents\PulseKeeper\extension\` on every start.)
+2. Open `chrome://extensions` or `edge://extensions` and turn on **Developer mode**.
+3. Choose **Load unpacked** and select that folder.
 
-In the **Export** tab, click **Export Agent Pack**. This produces a JSON file with two chained agents:
+Then right-click a page, selection or link and choose **Send to PulseKeeper**, or click the toolbar icon. The extension talks to a server that listens **only on `127.0.0.1:7828`** and accepts captures **only from the extension itself**. PulseKeeper must be running for captures to arrive; the Extension page shows the server status.
 
-1. **Content Collector** — runs `scripts/pk-bridge.js` to read the latest cached content from all enabled sources and output it as Markdown
-2. **AI Digest** — feeds that Markdown into your configured LLM and produces a summarized digest
+## AgentPlatform integration
 
-Import the JSON into AgentPlatform and it will run on the same refresh schedule configured in PulseKeeper.
+PulseKeeper can export an agent pack for [AgentPlatform](https://github.com/rod-trent/AgentPlatform) — **Export → Export Agent Pack** produces a JSON file with two chained agents: a *Content Collector* that runs `scripts/pk-bridge.js` to read the cached stories, and an *AI Digest* agent that summarises them with your configured model.
 
-### pk-bridge.js (standalone)
+`pk-bridge.js` also works on its own:
 
-`scripts/pk-bridge.js` can also be used directly from the command line:
-
-```bash
-node scripts/pk-bridge.js --format markdown --max 40
+```powershell
+node scripts\pk-bridge.js --format markdown --max 40
 ```
 
 | Flag | Values | Default |
 |---|---|---|
 | `--format` | `text`, `markdown`, `json` | `text` |
-| `--max` | number | `30` |
+| `--max` | number of stories | `30` |
 
----
+## Settings
 
-## AI / LLM Configuration
+Everything under **Settings** is saved automatically.
 
-Open the **AI / LLM** tab in settings. Supported providers:
-
-| Provider | Notes |
+| Section | Highlights |
 |---|---|
-| **Anthropic** | Claude models — requires API key |
-| **OpenAI** | GPT models — requires API key |
-| **xAI** | Grok models — requires API key |
-| **Ollama** | Local models, no API key — set base URL to `http://localhost:11434/v1` |
-| **Custom** | Any OpenAI-compatible endpoint |
+| **Appearance** | Auto / Light / Dark, seven accent colours, digest text size |
+| **Collection** | Check interval, how long to keep stories, stories per new source, collect on startup, open at Windows sign-in |
+| **Digest** | Format, where article links open, scheduled generation (every N hours or daily), history length |
+| **Notifications** | Windows toasts, notify after every refresh |
+| **Muted words** | Comma-separated; hides matching stories everywhere, reversibly |
+| **Backup** | Export or import sources, settings and saved stories as one JSON file |
 
 ---
 
-## Data Storage
+## Privacy and security
 
-All data is stored locally — nothing is sent to any cloud service except your configured LLM provider when generating a digest.
-
-```
-%USERPROFILE%\Documents\PulseKeeper\
-├── sources.json          # Source definitions
-├── settings.json         # App settings
-├── read.json             # Read item IDs
-├── health.json           # Per-source fetch health
-├── content\
-│   └── <sourceId>.json   # Cached items per source
-├── output\
-│   ├── digest.html
-│   ├── digest.md
-│   └── digest.pdf
-├── history\              # Last 10 generated digests
-│   └── digest-YYYY-MM-DD_HH-MM.<ext>
-└── extension\            # Browser extension (auto-copied on startup)
-    ├── manifest.json
-    ├── background.js
-    └── ...
-```
+- **Local first.** Sources, settings, read state, saved stories and summaries live in `Documents\PulseKeeper\`. Nothing is uploaded anywhere.
+- **What does leave your machine:** requests to the feeds and pages you subscribe to; story text sent to your chosen AI provider *only* when you generate a digest or summary (nothing is sent with a local model); and thumbnails, which your computer loads directly from each publisher like any browser would.
+- **API keys** are stored in `settings.json` on your machine. Treat that file, and any backup export that includes it, as sensitive.
+- **Untrusted content is treated that way.** Feed text is escaped before it is displayed; only `http`, `https` and `mailto` links are ever handed to Windows; the renderer runs with context isolation, no Node integration and a strict content-security policy with no inline scripts.
+- **The capture server** binds to localhost and rejects writes from anything but the browser extension, so a web page cannot inject stories.
 
 ---
 
-## Project Structure
+## How it works
+
+```
+ ┌──────────────┐  schedule / manual   ┌──────────────┐   fetchSource()   ┌─────────────────────┐
+ │  Scheduler   │ ───────────────────▶ │  Collector   │ ────────────────▶ │ rss · youtube ·     │
+ │  (node-cron) │                      │ 5 in parallel│ ◀──────────────── │ reddit · webpage    │
+ └──────────────┘                      └──────┬───────┘  items + ETag     └─────────┬───────────┘
+                                              │ merge, retention, backoff            │ http.js: timeout,
+                                              ▼                                      │ retry, charset
+                                       ┌──────────────┐  queryContent()              ▼
+                                       │   Storage    │ ◀─────────────────── Feeds, pages, APIs
+                                       │ JSON + cache │ ───────┐
+                                       └──────────────┘        │ IPC (contextBridge)
+                                              ▲                ▼
+                  ┌──────────────┐     ┌──────────────┐  ┌─────────────────────────────────┐
+                  │ LLM client   │ ◀── │ Main process │  │ Renderer: news · sources ·      │
+                  │ cloud/Ollama │     │  tray, IPC   │  │ health · AI · settings · popup  │
+                  └──────────────┘     └──────────────┘  └─────────────────────────────────┘
+```
+
+- **Collector** fetches enabled sources five at a time, sends conditional requests so unchanged feeds cost almost nothing, merges new stories, applies retention, and records health (duration, new stories, consecutive failures).
+- **Storage** keeps every read-modify-write atomic so parallel fetches can never lose an update, caches reads by file modification time, and answers the UI's questions (filter, search, sort, de-duplicate, page, unread counts) in the main process.
+- **LLM client** speaks the OpenAI dialect to cloud and custom endpoints and Ollama's native API to local models, streaming results with an idle watchdog.
+- **Renderer** is plain HTML, CSS and JavaScript with a small design-token system and GSAP for motion — no framework, no bundler.
+
+<details>
+<summary><b>Project structure</b></summary>
 
 ```
 PulseKeeper/
 ├── src/
 │   ├── main/
-│   │   ├── index.js          # Main process, tray, IPC, badge
-│   │   ├── preload.js        # contextBridge API
-│   │   ├── storage.js        # File-based persistence
-│   │   ├── collector.js      # Source fetch orchestration, mute words
-│   │   ├── scheduler.js      # node-cron refresh
-│   │   ├── server.js         # Local HTTP capture server (port 7828)
-│   │   ├── outputRenderer.js # HTML / Markdown / PDF generation
-│   │   ├── llmClient.js      # Universal LLM client
-│   │   ├── agentExport.js    # AgentPlatform pack builder
-│   │   └── sources/
-│   │       ├── index.js      # Source type registry & dispatcher
-│   │       ├── rss.js        # RSS / Atom / Podcast feeds
-│   │       ├── youtube.js    # YouTube (innertube API + RSS)
-│   │       ├── twitter.js    # X / Twitter API v2
-│   │       ├── reddit.js     # Reddit RSS feed
-│   │       ├── webpage.js    # Web page scraping (Cheerio)
-│   │       └── rssDiscover.js # RSS auto-discovery
+│   │   ├── index.js          Tray, windows, IPC, notifications, digest orchestration
+│   │   ├── preload.js        contextBridge API (window.pcbAPI)
+│   │   ├── storage.js        JSON persistence and read model (query, channels, saved)
+│   │   ├── collector.js      Parallel fetch, merge/retention, backoff, conditional GET
+│   │   ├── scheduler.js      node-cron refresh and auto-digest
+│   │   ├── http.js           Shared HTTP helper (timeout, retry, charset, ETag)
+│   │   ├── util.js           HTML → text, dates, URL canonicalisation, OPML
+│   │   ├── llmClient.js      Cloud + Ollama client, digests, story summaries
+│   │   ├── server.js         Local capture server (127.0.0.1:7828)
+│   │   ├── outputRenderer.js HTML / Markdown digest
+│   │   ├── agentExport.js    AgentPlatform pack builder
+│   │   └── sources/          rss · youtube · reddit · webpage · article · rssDiscover
 │   └── renderer/
-│       ├── index.html        # Settings window
-│       ├── popup.html        # Tray popup
-│       ├── app.js            # Settings window logic
-│       ├── popup.js          # Popup logic
-│       └── styles.css        # Fluent Design theme (dark + light)
-├── extension/                # Chrome/Edge MV3 extension (source)
-│   ├── manifest.json
-│   ├── background.js
-│   ├── content.js
-│   ├── popup.html/css/js
-│   ├── generate-icons.js
-│   └── icons/
-├── scripts/
-│   └── pk-bridge.js          # AgentPlatform bridge / CLI
-├── assets/
-│   └── icon.svg
-└── package.json
+│       ├── index.html        Main window markup
+│       ├── theme.css         Design tokens and shared controls (light/dark/accent)
+│       ├── styles.css        Main window layout and views
+│       ├── motion.js         GSAP animation helpers
+│       ├── ui.js             Toasts, dialogs, menus, formatting
+│       ├── news.js           Channels, story list, reader, saved, AI summary
+│       ├── app.js            Sources, health, AI settings, settings, export
+│       └── popup.*           Tray popup
+├── extension/                Chrome / Edge MV3 extension
+├── scripts/pk-bridge.js      AgentPlatform bridge and CLI
+├── test/backend.test.js      Backend test suite
+└── Images/screenshots/       README screenshots
 ```
 
+</details>
+
+## Data on disk
+
+Everything lives in `%USERPROFILE%\Documents\PulseKeeper\` as plain files you can back up, inspect or delete:
+
+```
+sources.json        Your sources (with categories)
+settings.json       App settings and AI configuration
+read.json           IDs of stories you have read
+saved.json          Saved stories (full snapshots)
+summaries.json      Cached AI story summaries
+ai-digest.json      The cached AI digest
+health.json         Per-source fetch health and conditional-request validators
+content\<id>.json   Cached stories per source
+output\             digest.html / digest.md / digest.pdf
+history\            Archive of generated digests
+extension\          Browser extension (copied on startup)
+```
+
+Deleting the folder resets PulseKeeper to its defaults. A file that cannot be parsed is copied to `<name>.corrupt-<timestamp>` before it can be overwritten.
+
 ---
 
-## License
+## Development
 
-MIT — see [LICENSE](LICENSE)
+```powershell
+npm install        # dependencies
+npm start          # run the app (entry: src/main/index.js)
+npm test           # backend test suite (node:test)
+npm run build      # Windows installer + portable build
+```
+
+If `npm` is not recognised in PowerShell, add Node to the session path first: `$env:Path = "C:\Program Files\nodejs;" + $env:Path`.
+
+**Tests.** `npm test` runs the backend suite against local fake servers and a throwaway home directory — no network and none of your real data is touched. It covers the collector and retention rules, storage and read model, every fetcher, feed discovery, article extraction, scheduling maths and the LLM client (including a fake Ollama).
+
+**Conventions.** Plain CommonJS in the main process, vanilla JavaScript in the renderer, two-space indent, semicolons. The renderer's content-security policy forbids inline scripts. Use the colour tokens in `theme.css` and the helpers in `motion.js` rather than ad-hoc styles and animations. See [CLAUDE.md](CLAUDE.md) for a deeper tour of the architecture and its gotchas.
+
+## Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| **No window appears** | PulseKeeper lives in the tray. Look behind the `^` arrow, then right-click → *Open PulseKeeper*. |
+| **A source shows an error** | Open **Health** for the exact message. `HTTP 403/429` usually means the site rate-limits or blocks automated requests; try again later or add its real feed URL with **Find Feed**. |
+| **YouTube `@handle` not found** | Use the `…/channel/UC…` URL instead. |
+| **Extension says PulseKeeper is not running** | Start the app. If port 7828 is in use, close the other program or the second PulseKeeper instance. |
+| **Ollama: "Connection refused"** | Start the server with `ollama serve`, or check the server address under AI &amp; Models. |
+| **Ollama: "isn't installed"** | Run `ollama pull <model>`, or press the refresh button beside *Model* and choose an installed one. |
+| **Digest times out on a local model** | Lower *Stories per digest*, or raise *Request timeout*. Slow CPU models can need minutes before the first word. |
+| **"Authentication failed"** | The key for the *selected provider* is missing or wrong — keys are stored per provider. |
+| **Stories look old or missing** | Check *Keep stories for* in Settings, and whether a muted word matches. |
+| **Start over** | Quit from the tray and delete `Documents\PulseKeeper\`. |
 
 ---
 
-*PulseKeeper is a companion app to [AgentPlatform](https://github.com/rod-trent/AgentPlatform).*
+## Credits and license
+
+PulseKeeper was created by [rod-trent](https://github.com/rod-trent/PulseKeeper) as a companion to [AgentPlatform](https://github.com/rod-trent/AgentPlatform) and is maintained in this repository by [Vinit Girdhar](https://github.com/vinitgirdhar).
+
+Built with [Electron](https://www.electronjs.org/), [GSAP](https://gsap.com/), [Inter](https://rsms.me/inter/), [rss-parser](https://github.com/rbren/rss-parser), [cheerio](https://cheerio.js.org/), [node-cron](https://github.com/node-cron/node-cron), [marked](https://marked.js.org/) and the [OpenAI SDK](https://github.com/openai/openai-node).
+
+Released under the [MIT License](LICENSE).

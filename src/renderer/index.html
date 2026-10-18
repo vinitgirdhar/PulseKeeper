@@ -1,538 +1,448 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:7828 http://127.0.0.1:7828">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; font-src 'self' data:; connect-src 'self' http://localhost:7828 http://127.0.0.1:7828">
   <title>PulseKeeper</title>
+  <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-layout">
+<div class="app">
 
-  <!-- Sidebar -->
-  <nav class="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-logo">
-        <svg width="22" height="22" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-          <rect width="64" height="64" rx="12" fill="#0b1d3a"/>
-          <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34"
-            fill="none" stroke="#60cdff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>PulseKeeper</span>
-      </div>
-    </div>
-    <div class="sidebar-nav">
-      <div class="nav-item active" data-tab="sources">
-        <span class="nav-icon" data-icon="sources"></span>
-        <span>Sources</span>
-        <span class="nav-badge" id="sourceBadge">0</span>
-      </div>
-      <div class="nav-item" data-tab="feed">
-        <span class="nav-icon">📰</span>
-        <span>Content</span>
-        <span class="nav-badge" id="feedBadge">0</span>
-      </div>
-      <div class="nav-item" data-tab="settings">
-        <span class="nav-icon" data-icon="settings"></span>
-        <span>Settings</span>
-      </div>
-      <div class="nav-item" data-tab="llm">
-        <span class="nav-icon" data-icon="ai"></span>
-        <span>AI / LLM</span>
-      </div>
-      <div class="nav-item" data-tab="health">
-        <span class="nav-icon" data-icon="health"></span>
-        <span>Health</span>
-      </div>
-      <div class="nav-item" data-tab="export">
-        <span class="nav-icon" data-icon="export"></span>
-        <span>Export</span>
-      </div>
-      <div class="nav-item" data-tab="extension">
-        <span class="nav-icon" data-icon="puzzle"></span>
-        <span>Extension</span>
-      </div>
-      <div class="nav-item" data-tab="about">
-        <span class="nav-icon" data-icon="info"></span>
-        <span>About</span>
-      </div>
-    </div>
-    <button class="theme-toggle-btn" id="btnThemeToggle" title="Toggle light/dark theme"><span data-icon="moon"></span> <span class="theme-label">Dark Mode</span></button>
-    <div class="sidebar-footer" id="statusBar">Ready</div>
-  </nav>
-
-  <!-- Content -->
-  <div class="content-area">
-
-    <!-- ── Sources Tab ── -->
-    <div id="tab-sources" class="tab-content">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Content Sources</div>
-          <div class="page-subtitle">Manage your feeds, channels, and monitored pages</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnImportOPML"><span data-icon="import"></span> Import OPML</button>
-          <button class="btn btn-secondary" id="btnRefreshAll"><span data-icon="refresh"></span> Refresh All</button>
-          <button class="btn btn-primary" id="btnAddSource"><span data-icon="plus"></span> Add Source</button>
-        </div>
-      </div>
-      <div id="sourceList" class="source-list">
-        <div class="empty-state">
-          <div class="empty-icon" data-icon="sources" data-size="44"></div>
-          <h3>No sources yet</h3>
-          <p>Add your first content source to get started</p>
-          <button class="btn btn-primary" onclick="openAddSource()"><span data-icon="plus"></span> Add Source</button>
-        </div>
-      </div>
+  <!-- ═════════ Sidebar ═════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-head drag">
+      <svg class="brand-mark" width="26" height="26" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="15" fill="#0b1d3a"/>
+        <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34" fill="none" stroke="#60cdff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">PulseKeeper</span>
     </div>
 
-    <!-- ── Content / Feed Tab ── -->
-    <div id="tab-feed" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Content</div>
-          <div class="page-subtitle">All items collected from your sources</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnFeedMarkAllRead">✓ Mark all read</button>
-          <button class="btn btn-secondary" id="btnFeedRefresh">🔄 Refresh All</button>
-        </div>
-      </div>
-      <div class="feed-toolbar">
-        <input type="text" class="input feed-search" id="feedSearch" placeholder="Search title or description…">
-        <div class="feed-filters" id="feedFilters"></div>
-      </div>
-      <div class="feed-list" id="feedList">
-        <div class="empty-state"><div class="empty-icon">📰</div><h3>Loading…</h3></div>
-      </div>
+    <div class="sidebar-scroll" id="navScroll">
+      <span class="nav-pill" id="navPill"></span>
+
+      <button class="side-item" data-view="news" data-channel="all" id="navAll">
+        <span class="side-icon accent" data-icon="news"></span>
+        <span class="side-label-text">All Stories</span>
+        <span class="badge" id="badgeAll">0</span>
+      </button>
+
+      <button class="side-item" data-view="news" data-channel="saved" id="navSaved">
+        <span class="side-icon accent" data-icon="bookmark"></span>
+        <span class="side-label-text">Saved</span>
+        <span class="badge" id="badgeSaved"></span>
+      </button>
+
+      <div id="channels"></div>
+
+      <div class="side-heading">Manage</div>
+      <button class="side-item" data-view="sources"><span class="side-icon" data-icon="sources"></span><span class="side-label-text">Sources</span><span class="badge" id="badgeSources">0</span></button>
+      <button class="side-item" data-view="health"><span class="side-icon" data-icon="health"></span><span class="side-label-text">Health</span><span class="badge err" id="badgeHealth" hidden>0</span></button>
+      <button class="side-item" data-view="ai"><span class="side-icon" data-icon="ai"></span><span class="side-label-text">AI &amp; Models</span></button>
+      <button class="side-item" data-view="settings"><span class="side-icon" data-icon="settings"></span><span class="side-label-text">Settings</span></button>
+      <button class="side-item" data-view="export"><span class="side-icon" data-icon="export"></span><span class="side-label-text">Export</span></button>
+      <button class="side-item" data-view="extension"><span class="side-icon" data-icon="puzzle"></span><span class="side-label-text">Extension</span></button>
+      <button class="side-item" data-view="about"><span class="side-icon" data-icon="info"></span><span class="side-label-text">About</span></button>
     </div>
 
-    <!-- ── Settings Tab ── -->
-    <div id="tab-settings" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Settings</div>
-          <div class="page-subtitle">Configure refresh schedule and output preferences</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-primary" id="btnSaveSettings">Save Settings</button>
-        </div>
-      </div>
-      <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:20px;">
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="refresh"></span> Collection</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
-            <div class="form-group">
-              <label class="form-label">Refresh Interval</label>
-              <select class="select" id="settingInterval">
-                <option value="5">Every 5 minutes</option>
-                <option value="10">Every 10 minutes</option>
-                <option value="15">Every 15 minutes</option>
-                <option value="30" selected>Every 30 minutes</option>
-                <option value="60">Every hour</option>
-                <option value="120">Every 2 hours</option>
-                <option value="360">Every 6 hours</option>
-              </select>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <div><label class="form-label" style="margin:0">Run at Windows startup</label><div class="form-hint">Launch PulseKeeper automatically when you sign in</div></div>
-              <label class="toggle"><input type="checkbox" id="settingRunAtStartup"><span class="toggle-slider"></span></label>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <div><label class="form-label" style="margin:0">Collect on startup</label><div class="form-hint">Fetch all sources when PulseKeeper starts</div></div>
-              <label class="toggle"><input type="checkbox" id="settingCollectOnStartup" checked><span class="toggle-slider"></span></label>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Max Items per Source</label>
-              <input type="number" class="input" id="settingMaxItems" value="20" min="5" max="100">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Keep Records For</label>
-              <select class="select" id="settingRetentionDays">
-                <option value="1">1 day</option>
-                <option value="2">2 days</option>
-                <option value="3" selected>3 days</option>
-                <option value="4">4 days</option>
-                <option value="5">5 days</option>
-              </select>
-              <div class="form-hint">Items older than this are pruned automatically on each refresh</div>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="document"></span> Output Format</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
-            <div class="form-group">
-              <label class="form-label">Default Digest Format</label>
-              <select class="select" id="settingOutputFormat">
-                <option value="html">HTML (opens in viewer)</option>
-                <option value="markdown">Markdown (opens in editor)</option>
-                <option value="pdf">PDF (print-quality)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Open Digest Articles In</label>
-              <select class="select" id="settingDigestBrowser">
-                <option value="internal">In-app browser (built-in viewer)</option>
-                <option value="external">External browser (system default)</option>
-              </select>
-              <div class="form-hint">Controls where article links open when viewing the HTML digest</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Digest Font Size</label>
-              <select class="select" id="settingDigestFontSize">
-                <option value="small">Small</option>
-                <option value="medium" selected>Medium</option>
-                <option value="large">Large</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <h3><span data-icon="alarm"></span> Auto Digest</h3>
-            <label class="toggle"><input type="checkbox" id="settingAutoDigestEnabled"><span class="toggle-slider"></span></label>
-          </div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
-            <p style="font-size:12px;color:var(--text-secondary)">Generate and cache the AI digest on a schedule so opening it is instant (the slow model work runs in the background).</p>
-            <div class="form-group">
-              <label class="form-label">Schedule</label>
-              <select class="select" id="settingAutoDigestMode">
-                <option value="interval">Every N hours</option>
-                <option value="daily">Daily at a set time</option>
-              </select>
-            </div>
-            <div class="form-group" id="autoDigestIntervalGroup">
-              <label class="form-label">Run every (hours)</label>
-              <input type="number" class="input" id="settingAutoDigestHours" min="1" max="24" step="1" value="8">
-            </div>
-            <div class="form-group" id="autoDigestTimeGroup" style="display:none">
-              <label class="form-label">Generate Daily At</label>
-              <input type="time" class="input" id="settingAutoDigestTime" value="08:00">
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="bell"></span> Notifications</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <div><div style="font-size:13px;font-weight:500">Windows notifications</div><div class="form-hint">Toast notifications on refresh</div></div>
-              <label class="toggle"><input type="checkbox" id="settingNotifyEnabled" checked><span class="toggle-slider"></span></label>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <div><div style="font-size:13px;font-weight:500">Notify on every refresh</div></div>
-              <label class="toggle"><input type="checkbox" id="settingNotifyOnRefresh"><span class="toggle-slider"></span></label>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="mute"></span> Mute Words</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <p style="font-size:12px">Items whose title or description contains any of these words will be hidden. Separate with commas.</p>
-            <textarea class="textarea mute-textarea" id="settingMuteWords" placeholder="sponsored, advertisement, clickbait…"></textarea>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="save"></span> Backup &amp; Restore</h3></div>
-          <div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary" id="btnExportBackup"><span data-icon="upload"></span> Export Backup</button>
-            <button class="btn btn-secondary" id="btnImportBackup"><span data-icon="download"></span> Import Backup</button>
-          </div>
-        </div>
-      </div>
+    <div class="sidebar-foot">
+      <div class="status" id="statusBar"><span class="dot ok" id="statusDot"></span><span id="statusText">Ready</span></div>
+      <button class="btn btn-ghost btn-icon btn-sm" id="btnThemeToggle" title="Toggle light / dark" aria-label="Toggle light or dark appearance"></button>
     </div>
+  </aside>
 
-    <!-- ── LLM Tab ── -->
-    <div id="tab-llm" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div>
-          <div class="page-title">AI / LLM</div>
-          <div class="page-subtitle">Generate AI-powered digests using any LLM provider</div>
+  <!-- ═════════ Main ═════════ -->
+  <main class="main">
+    <div class="progress" id="progress"><i></i></div>
+
+    <!-- ── News ── -->
+    <section class="view" id="view-news">
+      <div class="news-split">
+        <div class="news-pane">
+          <header class="view-header drag">
+            <div class="titles">
+              <h1 id="newsTitle">All Stories</h1>
+              <p id="newsSubtitle">&nbsp;</p>
+            </div>
+            <div class="actions">
+              <button class="btn btn-icon btn-ghost" id="btnSort" title="Sort" aria-label="Sort"><span data-icon="sort"></span></button>
+              <button class="btn btn-icon btn-ghost" id="btnMarkAll" title="Mark everything here as read" aria-label="Mark all as read"><span data-icon="checkall"></span></button>
+              <button class="btn btn-icon btn-ghost" id="btnRefresh" title="Refresh all sources (Ctrl+R)" aria-label="Refresh"><span data-icon="refresh"></span></button>
+            </div>
+          </header>
+          <div class="news-toolbar">
+            <label class="search" for="newsSearch"><span data-icon="search"></span><input class="input" id="newsSearch" type="search" placeholder="Search stories  ( / )" autocomplete="off"></label>
+            <div class="seg" id="newsFilter"><button data-value="all">All</button><button data-value="unread">Unread</button></div>
+          </div>
+          <div class="news-scroll" id="newsScroll">
+            <div id="feedList"></div>
+            <div id="feedMore" class="feed-more" hidden><span class="spinner"></span></div>
+          </div>
+          <button class="new-pill" id="newPill" hidden><span data-icon="up"></span>New stories</button>
         </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnTestLLM">Test Connection</button>
-          <button class="btn btn-primary" id="btnSaveLLM">Save</button>
+
+        <aside class="reader" id="reader" aria-label="Story reader">
+          <div class="reader-inner" id="readerInner"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ── Sources ── -->
+    <section class="view" id="view-sources" hidden>
+      <header class="view-header drag">
+        <div class="titles"><h1>Sources</h1><p>Feeds, channels and pages PulseKeeper keeps an eye on</p></div>
+        <div class="actions">
+          <button class="btn" id="btnImportOPML"><span data-icon="import"></span>Import OPML</button>
+          <button class="btn" id="btnRefreshAll"><span data-icon="refresh"></span>Refresh All</button>
+          <button class="btn btn-primary" id="btnAddSource"><span data-icon="plus"></span>Add Source</button>
+        </div>
+      </header>
+      <div class="view-body">
+        <div class="page">
+          <label class="search page-search" for="sourceSearch"><span data-icon="search"></span><input class="input" id="sourceSearch" type="search" placeholder="Filter sources" autocomplete="off"></label>
+          <div id="sourceList"></div>
         </div>
       </div>
-      <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:20px;">
-        <div class="card">
-          <div class="card-header">
-            <h3><span data-icon="ai"></span> LLM Configuration</h3>
-            <label class="toggle"><input type="checkbox" id="llmEnabled"><span class="toggle-slider"></span></label>
+    </section>
+
+    <!-- ── Health ── -->
+    <section class="view" id="view-health" hidden>
+      <header class="view-header drag">
+        <div class="titles"><h1>Health</h1><p>Fetch status for every source</p></div>
+        <div class="actions"><button class="btn" id="btnRefreshHealth"><span data-icon="refresh"></span>Reload</button></div>
+      </header>
+      <div class="view-body">
+        <div class="page">
+          <div class="stats" id="healthStats"></div>
+          <div id="healthList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── AI & Models ── -->
+    <section class="view" id="view-ai" hidden>
+      <header class="view-header drag">
+        <div class="titles"><h1>AI &amp; Models</h1><p>Summarise your stories with a cloud model or one running on your machine</p></div>
+        <div class="actions">
+          <button class="btn" id="btnTestLLM"><span data-icon="bolt"></span>Test Connection</button>
+          <button class="btn btn-primary" id="btnGenerateDigestNow"><span data-icon="ai"></span>Generate Digest</button>
+        </div>
+      </header>
+      <div class="view-body">
+        <div class="page">
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Use AI for digests</div><div class="row-sub" id="llmActiveIndicator">AI is turned off</div></div>
+              <label class="switch"><input type="checkbox" id="llmEnabled"><i></i></label>
+            </div>
           </div>
-          <div class="llm-active-banner" id="llmActiveIndicator" style="display:none"></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Provider</label>
-                <select class="select" id="llmProvider">
-                  <option value="anthropic">Anthropic (Claude)</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="gemini">Google (Gemini)</option>
-                  <option value="xai">xAI (Grok)</option>
-                  <option value="groq">Groq</option>
-                  <option value="ollama">Ollama (Local)</option>
-                  <option value="custom">Custom endpoint</option>
-                </select>
-              </div>
-              <div class="form-group" id="llmModelSelectGroup">
-                <label class="form-label">Model</label>
-                <select class="select" id="llmModel">
-                  <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
-                  <option value="claude-opus-4-6">claude-opus-4-6</option>
-                  <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</option>
-                </select>
-              </div>
-              <div class="form-group" id="llmModelInputGroup" style="display:none">
-                <label class="form-label">Model Name</label>
-                <input type="text" class="input" id="llmModelInput" placeholder="e.g. llama3.1">
+
+          <div class="llm-panel" id="llmTestResult" hidden></div>
+          <div class="llm-panel" id="llmDigestStatus"></div>
+
+          <h2 class="group-title">Provider</h2>
+          <div class="provider-grid" id="providerGrid" role="radiogroup" aria-label="Provider"></div>
+
+          <h2 class="group-title">Model</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Model</div><div class="row-sub" id="llmModelHint">Pick one, or type any model name</div></div>
+              <div class="row-ctl wide combo">
+                <input class="input" id="llmModel" list="llmModelList" autocomplete="off" spellcheck="false" placeholder="model name">
+                <datalist id="llmModelList"></datalist>
+                <button class="btn btn-icon" id="btnLoadModels" title="Load the models this provider offers" aria-label="Load models"><span data-icon="refresh"></span></button>
               </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">API Key</label>
-              <input type="password" class="input" id="llmApiKey" placeholder="Stored locally on your machine only">
-            </div>
-            <div class="form-group" id="customBaseURLGroup" style="display:none">
-              <label class="form-label">Base URL / Host</label>
-              <input type="url" class="input" id="llmBaseURL" placeholder="http://192.168.1.95:11434/v1">
-              <p class="form-hint" id="llmBaseURLHint">For Ollama, leave blank for localhost, or point at a LAN box e.g. http://192.168.1.95:11434/v1</p>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Request timeout (seconds)</label>
-                <input type="number" class="input" id="llmTimeout" min="10" max="3600" step="10" placeholder="900">
-                <p class="form-hint">Local CPU models can take minutes. Raise this if generation times out.</p>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Max items to summarize</label>
-                <input type="number" class="input" id="llmMaxItems" min="1" max="100" step="1" placeholder="50">
-                <p class="form-hint">Fewer items = much faster on slow local models (~12 min for 5 items here).</p>
+            <div class="row" id="rowApiKey">
+              <div class="row-main"><div class="row-title">API key</div><div class="row-sub">Kept on this machine, remembered per provider</div></div>
+              <div class="row-ctl wide combo">
+                <input class="input" id="llmApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="paste your key">
+                <button class="btn btn-icon" id="btnRevealKey" title="Show / hide key" aria-label="Show or hide key"><span data-icon="eye"></span></button>
               </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Digest Prompt</label>
-              <textarea class="textarea" id="llmDigestPrompt" rows="3">Summarize the following content items into a concise daily digest with key highlights and insights:</textarea>
+            <div class="row" id="rowBaseURL" hidden>
+              <div class="row-main"><div class="row-title">Server address</div><div class="row-sub" id="llmBaseURLHint">Leave empty for this computer</div></div>
+              <div class="row-ctl wide"><input class="input" id="llmBaseURL" type="url" placeholder="http://localhost:11434" spellcheck="false"></div>
             </div>
-            <div class="form-group">
-              <label class="form-label">AI Digest</label>
-              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                <button class="btn btn-secondary" id="btnGenerateDigestNow"><span data-icon="ai"></span> Generate Now</button>
-                <div id="llmDigestStatus" class="llm-digest-status"></div>
-              </div>
+            <div class="row" id="rowNumCtx" hidden>
+              <div class="row-main"><div class="row-title">Context window</div><div class="row-sub">Tokens the local model may read. PulseKeeper trims the digest to fit, so nothing is silently cut off.</div></div>
+              <div class="row-ctl"><input class="input num" id="llmNumCtx" type="number" min="2048" max="262144" step="1024"></div>
             </div>
-            <div id="llmTestResult" class="llm-test-result" style="display:none"></div>
           </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- ── Health Tab ── -->
-    <div id="tab-health" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div>
-          <div class="page-title">Source Health</div>
-          <div class="page-subtitle">Fetch metrics and error status for each source</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" id="btnRefreshHealth"><span data-icon="refresh"></span> Refresh</button>
-        </div>
-      </div>
-      <div style="padding:20px">
-        <div id="healthList" class="source-list"></div>
-      </div>
-    </div>
-
-    <!-- ── Export Tab ── -->
-    <div id="tab-export" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div><div class="page-title">Export</div><div class="page-subtitle">Generate output and integrate with AgentPlatform</div></div>
-      </div>
-      <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px;">
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="document"></span> Generate Digest</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn btn-primary" onclick="window.pcbAPI.output.openDigest()"><span data-icon="globe"></span> Open HTML Digest</button>
-            <button class="btn btn-secondary" onclick="window.pcbAPI.output.exportMarkdown()"><span data-icon="document"></span> Export as Markdown</button>
-            <button class="btn btn-secondary" onclick="window.pcbAPI.output.exportPDF()"><span data-icon="file"></span> Export as PDF</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="robot"></span> AgentPlatform Integration</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
-            <p style="font-size:13px;line-height:1.7">Export as an <a href="#" onclick="window.pcbAPI.ui.openExternal('https://github.com/rod-trent/AgentPlatform')">AgentPlatform</a> agent pack. Creates a chained Script Agent (collects content) + Prompt Agent (AI digest).</p>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-primary" onclick="exportAgentPack(false)"><span data-icon="export"></span> Export Full Pack</button>
-              <button class="btn btn-secondary" onclick="exportAgentPack(true)">Script Agent Only</button>
+          <h2 class="group-title">Digest</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Stories per digest</div><div class="row-sub">Fewer stories is much faster on a local model</div></div>
+              <div class="row-ctl"><input class="input num" id="llmMaxItems" type="number" min="1" max="200" step="1"></div>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Request timeout</div><div class="row-sub">Seconds of silence before giving up. CPU models can need minutes for the first word.</div></div>
+              <div class="row-ctl"><input class="input num" id="llmTimeout" type="number" min="10" max="3600" step="10"></div>
+            </div>
+            <div class="row stack">
+              <div class="row-main"><div class="row-title">Prompt</div></div>
+              <textarea class="textarea" id="llmDigestPrompt" rows="3"></textarea>
             </div>
           </div>
+
         </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="folder"></span> Data Folders</h3></div>
-          <div class="card-body" style="display:flex;gap:8px">
-            <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openDataDir()">Open Data Folder</button>
-            <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openOutputDir()">Open Output Folder</button>
+      </div>
+    </section>
+
+    <!-- ── Settings ── -->
+    <section class="view" id="view-settings" hidden>
+      <header class="view-header drag">
+        <div class="titles"><h1>Settings</h1><p>Changes are saved automatically</p></div>
+        <div class="actions"><span class="save-flash" id="savedPill"><span data-icon="check"></span>Saved</span></div>
+      </header>
+      <div class="view-body">
+        <div class="page">
+          <h2 class="group-title">Appearance</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Theme</div></div>
+              <div class="seg" id="themeSeg"><button data-value="auto">Auto</button><button data-value="light">Light</button><button data-value="dark">Dark</button></div>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Accent colour</div></div>
+              <div class="swatches" id="accentSwatches" role="radiogroup" aria-label="Accent colour"></div>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Digest text size</div></div>
+              <select class="select inline-select" id="settingDigestFontSize"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
+            </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <h3><span data-icon="clock"></span> Digest History</h3>
-          </div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
-            <div class="form-group">
-              <label class="form-label">Keep Last N Digests</label>
-              <select class="select" id="settingHistoryMaxCount">
-                <option value="5">5 digests</option>
-                <option value="10" selected>10 digests</option>
-                <option value="20">20 digests</option>
-                <option value="30">30 digests</option>
-                <option value="50">50 digests</option>
+
+          <h2 class="group-title">Collection</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Check sources</div><div class="row-sub">Sources that fail repeatedly are retried less often</div></div>
+              <select class="select inline-select" id="settingInterval">
+                <option value="5">Every 5 minutes</option><option value="10">Every 10 minutes</option><option value="15">Every 15 minutes</option>
+                <option value="30">Every 30 minutes</option><option value="60">Every hour</option><option value="120">Every 2 hours</option><option value="360">Every 6 hours</option>
               </select>
-              <div class="form-hint">Older digests are automatically deleted</div>
             </div>
-            <button class="btn btn-primary btn-sm" id="btnSaveHistorySettings" style="align-self:flex-start">Save</button>
-            <div class="history-list" id="historyList">
-              <div style="color:var(--text-disabled);font-size:12px">Loading…</div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Keep stories for</div><div class="row-sub">By publish date. Each source always keeps its latest few.</div></div>
+              <select class="select inline-select" id="settingRetentionDays">
+                <option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="5">5 days</option><option value="7">1 week</option><option value="14">2 weeks</option><option value="30">1 month</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Stories per new source</div></div>
+              <div class="row-ctl"><input class="input num" id="settingMaxItems" type="number" min="5" max="200"></div>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Collect on startup</div></div>
+              <label class="switch"><input type="checkbox" id="settingCollectOnStartup"><i></i></label>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Open at Windows sign-in</div></div>
+              <label class="switch"><input type="checkbox" id="settingRunAtStartup"><i></i></label>
             </div>
           </div>
-        </div>
-      </div>
-      </div>
-    </div>
 
-    <!-- ── Extension Tab ── -->
-    <div id="tab-extension" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div><div class="page-title">Browser Extension</div><div class="page-subtitle">Send pages and selections from Chrome/Edge directly to PulseKeeper</div></div>
-      </div>
-      <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px;">
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="puzzle"></span> Install the Extension</h3></div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
-            <ol style="font-size:13px;line-height:2;padding-left:20px;color:var(--text-secondary)">
-              <li>Open <strong style="color:var(--text)">chrome://extensions</strong> (Chrome) or <strong style="color:var(--text)">edge://extensions</strong> (Edge)</li>
-              <li>Enable <strong style="color:var(--text)">Developer mode</strong></li>
-              <li>Click <strong style="color:var(--text)">Load unpacked</strong></li>
-              <li>Select the <code>extension</code> folder inside the PulseKeeper directory</li>
-            </ol>
-            <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openExtensionDir()">Open Extension Folder</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3><span data-icon="bolt"></span> How to Use</h3></div>
-          <div class="card-body">
-            <ul style="font-size:13px;line-height:2;padding-left:20px;color:var(--text-secondary)">
-              <li><strong style="color:var(--text)">Right-click any page</strong> → "Send page to PulseKeeper"</li>
-              <li><strong style="color:var(--text)">Select text, right-click</strong> → "Send selection to PulseKeeper"</li>
-              <li><strong style="color:var(--text)">Right-click any link</strong> → "Send link to PulseKeeper"</li>
-              <li><strong style="color:var(--text)">Click the extension icon</strong> to send the current page</li>
-            </ul>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <h3><span data-icon="plug"></span> Capture Server Status</h3>
-            <div id="serverStatus" style="font-size:11px;color:var(--text-secondary)">Checking…</div>
-          </div>
-          <div class="card-body">
-            <p style="font-size:12px;color:var(--text-secondary)">PulseKeeper runs a local server on <code>http://localhost:7828</code> that the extension connects to. Make sure PulseKeeper is running when using the extension.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── About Tab ── -->
-    <div id="tab-about" class="tab-content" style="display:none">
-      <div class="page-header">
-        <div><div class="page-title">About PulseKeeper</div></div>
-      </div>
-      <div style="padding:20px;max-width:560px;display:flex;flex-direction:column;gap:16px;">
-        <div class="card">
-          <div class="card-body" style="text-align:center;padding:32px">
-            <svg width="56" height="56" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:16px">
-              <rect width="64" height="64" rx="14" fill="#0b1d3a"/>
-              <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34"
-                fill="none" stroke="#60cdff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="26" cy="16" r="3" fill="#60cdff" opacity="0.9"/>
-            </svg>
-            <h2 style="margin-bottom:8px">PulseKeeper</h2>
-            <p style="margin-bottom:6px;font-size:13px">Keep your pulse on the content that matters.</p>
-            <p style="font-size:12px;color:var(--text-disabled);margin-bottom:20px">Version 1.1.0 · Windows 11 · Electron</p>
-            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-              <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openExternal('https://github.com/rod-trent/PulseKeeper')">GitHub Repository</button>
-              <button class="btn btn-secondary" onclick="window.pcbAPI.ui.openExternal('https://github.com/rod-trent/AgentPlatform')">AgentPlatform</button>
+          <h2 class="group-title">Digest</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Format</div></div>
+              <select class="select inline-select" id="settingOutputFormat"><option value="html">HTML viewer</option><option value="markdown">Markdown</option><option value="pdf">PDF</option></select>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Open links in</div><div class="row-sub">Where articles open from the HTML digest</div></div>
+              <select class="select inline-select" id="settingDigestBrowser"><option value="internal">Built-in viewer</option><option value="external">Default browser</option></select>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Generate automatically</div><div class="row-sub">Runs the AI summary in the background so opening the digest is instant</div></div>
+              <label class="switch"><input type="checkbox" id="settingAutoDigestEnabled"><i></i></label>
+            </div>
+            <div class="row" id="rowAutoMode">
+              <div class="row-main"><div class="row-title">Schedule</div></div>
+              <select class="select inline-select" id="settingAutoDigestMode"><option value="interval">Every few hours</option><option value="daily">Once a day</option></select>
+            </div>
+            <div class="row" id="rowAutoHours">
+              <div class="row-main"><div class="row-title">Every</div></div>
+              <div class="row-ctl unit"><input class="input num" id="settingAutoDigestHours" type="number" min="1" max="24" step="1"><span>hours</span></div>
+            </div>
+            <div class="row" id="rowAutoTime">
+              <div class="row-main"><div class="row-title">At</div></div>
+              <div class="row-ctl"><input class="input num" id="settingAutoDigestTime" type="time"></div>
+            </div>
+            <div class="row">
+              <div class="row-main"><div class="row-title">Digests to keep</div></div>
+              <select class="select inline-select" id="settingHistoryMaxCount"><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="50">50</option></select>
             </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3>Supported Sources</h3></div>
-          <div class="card-body">
-            <div class="tag-grid">
-              <span class="tag type-rss"><span data-icon="rss"></span> RSS / Atom</span>
-              <span class="tag type-podcast"><span data-icon="podcast"></span> Podcasts</span>
-              <span class="tag type-youtube"><span data-icon="youtube"></span> YouTube</span>
-              <span class="tag type-reddit"><span data-icon="reddit"></span> Reddit</span>
-              <span class="tag type-newsletter"><span data-icon="mail"></span> Newsletters</span>
-              <span class="tag type-blog"><span data-icon="blog"></span> Blogs</span>
-              <span class="tag" style="border-color:#0078d4;color:#60cdff"><span data-icon="globe"></span> Web Pages</span>
-              <span class="tag" style="border-color:#107c10;color:#6ccb5f"><span data-icon="puzzle"></span> Browser Ext</span>
+
+          <h2 class="group-title">Notifications</h2>
+          <div class="group">
+            <div class="row"><div class="row-main"><div class="row-title">Show notifications</div></div><label class="switch"><input type="checkbox" id="settingNotifyEnabled"><i></i></label></div>
+            <div class="row"><div class="row-main"><div class="row-title">Notify after every refresh</div></div><label class="switch"><input type="checkbox" id="settingNotifyOnRefresh"><i></i></label></div>
+          </div>
+
+          <h2 class="group-title">Muted words</h2>
+          <div class="group">
+            <div class="row stack">
+              <div class="row-main"><div class="row-sub">Stories whose title or summary contain any of these words are hidden — including ones already collected. Separate with commas.</div></div>
+              <textarea class="textarea" id="settingMuteWords" rows="2" placeholder="sponsored, advertisement, clickbait"></textarea>
+            </div>
+          </div>
+
+          <h2 class="group-title">Backup</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Sources &amp; settings</div><div class="row-sub">Export to a JSON file, or restore from one</div></div>
+              <div class="row-ctl"><button class="btn" id="btnExportBackup"><span data-icon="upload"></span>Export</button><button class="btn" id="btnImportBackup"><span data-icon="download"></span>Import</button></div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-  </div>
+    <!-- ── Export ── -->
+    <section class="view" id="view-export" hidden>
+      <header class="view-header drag"><div class="titles"><h1>Export</h1><p>Digests, agent packs and your data folders</p></div></header>
+      <div class="view-body">
+        <div class="page">
+          <h2 class="group-title">Digest</h2>
+          <div class="group">
+            <button class="row action" id="btnOpenDigest"><span class="side-icon accent" data-icon="globe"></span><div class="row-main"><div class="row-title">Open HTML digest</div></div><span class="chev" data-icon="chevron"></span></button>
+            <button class="row action" id="btnExportMd"><span class="side-icon accent" data-icon="document"></span><div class="row-main"><div class="row-title">Export as Markdown</div></div><span class="chev" data-icon="chevron"></span></button>
+            <button class="row action" id="btnExportPdf"><span class="side-icon accent" data-icon="file"></span><div class="row-main"><div class="row-title">Export as PDF</div></div><span class="chev" data-icon="chevron"></span></button>
+          </div>
+
+          <h2 class="group-title">AgentPlatform</h2>
+          <div class="group">
+            <div class="row stack">
+              <div class="row-main"><div class="row-sub">Export an <a href="#" data-external="https://github.com/rod-trent/AgentPlatform">AgentPlatform</a> agent pack: a Script Agent that collects content, chained to a Prompt Agent that writes the digest.</div></div>
+              <div class="row-ctl"><button class="btn btn-primary" id="btnExportPack"><span data-icon="export"></span>Export Agent Pack</button></div>
+            </div>
+          </div>
+
+          <h2 class="group-title">Folders</h2>
+          <div class="group">
+            <button class="row action" id="btnOpenData"><span class="side-icon accent" data-icon="folder"></span><div class="row-main"><div class="row-title">Open data folder</div></div><span class="chev" data-icon="chevron"></span></button>
+            <button class="row action" id="btnOpenOutput"><span class="side-icon accent" data-icon="folder"></span><div class="row-main"><div class="row-title">Open output folder</div></div><span class="chev" data-icon="chevron"></span></button>
+          </div>
+
+          <h2 class="group-title">Digest history</h2>
+          <div class="group" id="historyList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Extension ── -->
+    <section class="view" id="view-extension" hidden>
+      <header class="view-header drag"><div class="titles"><h1>Browser Extension</h1><p>Send pages, selections and links from Chrome or Edge</p></div></header>
+      <div class="view-body">
+        <div class="page">
+          <h2 class="group-title">Install</h2>
+          <div class="group">
+            <div class="row stack">
+              <ol class="steps">
+                <li>Open <code>chrome://extensions</code> or <code>edge://extensions</code></li>
+                <li>Turn on <strong>Developer mode</strong></li>
+                <li>Choose <strong>Load unpacked</strong> and select the extension folder</li>
+              </ol>
+              <div class="row-ctl"><button class="btn" id="btnOpenExtension"><span data-icon="folder"></span>Open Extension Folder</button></div>
+            </div>
+          </div>
+          <h2 class="group-title">Use</h2>
+          <div class="group">
+            <div class="row"><div class="row-main"><div class="row-title">Right-click a page, selection or link</div><div class="row-sub">Choose “Send to PulseKeeper”</div></div></div>
+            <div class="row"><div class="row-main"><div class="row-title">Click the toolbar icon</div><div class="row-sub">Sends the current page</div></div></div>
+          </div>
+          <h2 class="group-title">Capture server</h2>
+          <div class="group">
+            <div class="row">
+              <div class="row-main"><div class="row-title">Local server on port 7828</div><div class="row-sub">Only the extension may send captures. Keep PulseKeeper running while you use it.</div></div>
+              <div class="status" id="serverStatus">Checking…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── About ── -->
+    <section class="view" id="view-about" hidden>
+      <header class="view-header drag"><div class="titles"><h1>About</h1></div></header>
+      <div class="view-body">
+        <div class="page about">
+          <svg width="84" height="84" viewBox="0 0 64 64" aria-hidden="true">
+            <rect width="64" height="64" rx="15" fill="#0b1d3a"/>
+            <polyline points="4,34 14,34 18,26 22,42 26,16 30,50 34,34 44,34 48,27 52,41 60,34" fill="none" stroke="#60cdff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="26" cy="16" r="3" fill="#60cdff"/>
+          </svg>
+          <h2>PulseKeeper</h2>
+          <p>Keep your pulse on the content that matters.</p>
+          <p class="hint">Version 1.1.0 · Windows · Electron</p>
+          <div class="about-actions">
+            <button class="btn" data-external="https://github.com/rod-trent/PulseKeeper">GitHub</button>
+            <button class="btn" data-external="https://github.com/rod-trent/AgentPlatform">AgentPlatform</button>
+          </div>
+          <div class="about-types" id="aboutTypes"></div>
+        </div>
+      </div>
+    </section>
+  </main>
 </div>
 
-<!-- Add / Edit Source Modal -->
-<div class="modal-overlay" id="addSourceModal" style="display:none">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modalTitle">Add Source</div>
-      <button class="modal-close" onclick="closeModal()" aria-label="Close" data-icon="close"></button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Source Type</label>
-        <select class="select" id="sourceType" onchange="onSourceTypeChange()">
-          <option value="">Select a type…</option>
-        </select>
-        <div class="form-hint" id="sourceTypeHint"></div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Display Name</label>
-        <input type="text" class="input" id="sourceName" placeholder="e.g. Jolly's Channel">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Max Items</label>
-          <input type="number" class="input" id="sourceMaxItems" value="20" min="1" max="200">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Refresh Interval (min)</label>
-          <input type="number" class="input" id="sourceRefreshInterval" value="0" min="0" max="1440" placeholder="0 = use global">
-          <div class="form-hint">0 = use the global schedule</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
-        <div>
-          <label class="form-label" style="margin:0">Bypass Global Mute Words</label>
-          <div class="form-hint">Show all items from this source even if they match muted words</div>
-        </div>
-        <label class="toggle"><input type="checkbox" id="sourceIgnoreMute"><span class="toggle-slider"></span></label>
+<!-- Add / edit source -->
+<div class="scrim" id="sourceScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="sheet-head"><h2 id="modalTitle">Add Source</h2></div>
+    <div class="sheet-body">
+      <div class="field">
+        <label for="sourceType">Type</label>
+        <select class="select" id="sourceType"><option value="">Select a type…</option></select>
+        <div class="hint" id="sourceTypeHint"></div>
       </div>
       <div id="sourceFields"></div>
+      <div class="field-row">
+        <div class="field"><label for="sourceName">Name</label><input class="input" id="sourceName" placeholder="e.g. Ars Technica"></div>
+        <div class="field"><label for="sourceCategory">Category</label><input class="input" id="sourceCategory" list="categoryList" placeholder="General"><datalist id="categoryList"></datalist></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label for="sourceMaxItems">Stories to keep</label><input class="input" id="sourceMaxItems" type="number" min="1" max="200"></div>
+        <div class="field"><label for="sourceRefreshInterval">Check every (min)</label><input class="input" id="sourceRefreshInterval" type="number" min="0" max="1440" placeholder="0 = follow global"></div>
+      </div>
+      <div class="row inline">
+        <div class="row-main"><div class="row-title">Ignore muted words</div><div class="row-sub">Show everything from this source</div></div>
+        <label class="switch"><input type="checkbox" id="sourceIgnoreMute"><i></i></label>
+      </div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    <div class="sheet-foot">
+      <button class="btn" id="btnCancelSource">Cancel</button>
       <button class="btn btn-primary" id="btnSaveSource">Add Source</button>
     </div>
   </div>
 </div>
 
+<!-- Confirm -->
+<div class="scrim" id="confirmScrim" hidden>
+  <div class="sheet small" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="sheet-body center">
+      <h2 id="confirmTitle"></h2>
+      <p id="confirmBody"></p>
+    </div>
+    <div class="sheet-foot split">
+      <button class="btn" id="confirmCancel">Cancel</button>
+      <button class="btn btn-primary" id="confirmOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="../../node_modules/gsap/dist/gsap.min.js"></script>
 <script src="icons.js"></script>
+<script src="motion.js"></script>
+<script src="ui.js"></script>
+<script src="news.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

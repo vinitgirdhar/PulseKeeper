@@ -2,6 +2,27 @@
 
 ---
 
+## Unreleased
+
+### News aggregator + new UI
+- New **News** home: a sidebar of categories and sources with live unread counts; select all stories, a category, or one source. Search, unread filter, sorting, day grouping, a reader panel and keyboard shortcuts (`J`/`K`, `M`, `O`, `/`, `Esc`)
+- **Saved** stories (bookmark, `S`): kept as snapshots, so they survive retention pruning and deleting the source
+- **AI summary per story** in the reader: extracts the article text (best effort), streams bullets from your model, caches the result
+- Sources now have a **category**; OPML folders import as categories
+- Complete visual redesign (Apple-style light/dark, accent colours, Inter, GSAP animations, reduced-motion aware); the tray popup and HTML digest follow the same design
+- Settings auto-save; the Add Source sheet fetches the new source immediately
+
+### Backend
+- One shared HTTP layer for every fetcher (timeouts, retries, charset, size cap) — replaces ~600 lines of hand-rolled request code
+- Conditional GET (ETag / Last-Modified), 5 sources fetched in parallel, exponential backoff for failing sources, YouTube handle lookups cached
+- Storage: read-modify-write is atomic (fixes lost health/read-state updates under parallel fetching), reads are cached by mtime, server-side query/search/dedupe
+- Retention is by publish date with a per-source floor (fixes old items being re-added as "new" every few days); mute words apply to already-collected stories; same story from two sources is shown once and read once
+- Fixes: refresh intervals of 2 h / 6 h ran hourly; `blog`/`newsletter` sources were typed `rss`; renamed sources kept the old name on stored items; OPML import broke on `&amp;` URLs and attribute order; browser captures were pruned after the retention window
+- LLM: streaming with progress, idle (not total) timeout, no retry after a timeout, per-provider API keys honoured by the backend, model list fetched from the provider, `<think>` blocks stripped, OpenAI o-series / Gemini Pro parameter quirks handled; Ollama uses its native API so the context window is set and the digest is trimmed to fit instead of being silently truncated
+- Security: only http(s)/mailto links reach the OS shell; the capture server accepts writes from the browser extension only; strict script CSP in the renderer
+
+---
+
 ## v1.1.0 — April 13, 2026
 
 ### What's New
