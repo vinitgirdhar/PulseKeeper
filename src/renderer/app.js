@@ -55,8 +55,14 @@ function setCollecting(on, text) {
   $('progress').classList.toggle('on', on);
   $('statusDot').className = `dot ${on ? 'busy' : 'ok'}`;
   $('statusText').textContent = on ? (text || 'Refreshing…') : 'Ready';
-  if (!on) $('progress').style.setProperty('--p', '1');
-  else $('progress').style.setProperty('--p', '0.04');
+  const bar = $('progress');
+  if (!on) { bar.style.setProperty('--p', '1'); return; }
+  // Restart from the left without animating backwards.
+  const fill = bar.firstElementChild;
+  fill.style.transition = 'none';
+  bar.style.setProperty('--p', '0.04');
+  fill.offsetWidth; // flush
+  fill.style.transition = '';
 }
 
 // ═════ Sources ════════════════════════════════════════════════════════════════
@@ -723,6 +729,7 @@ function wire() {
   // Main-process events
   api.on.collectStart(() => setCollecting(true));
   api.on.collectProgress(({ done, total, name }) => {
+    if (!collecting) setCollecting(true); // the sweep began before this window opened
     $('progress').style.setProperty('--p', String(Math.max(0.04, done / total)));
     $('statusText').textContent = `Refreshing ${done}/${total}`;
     $('statusText').title = name || '';
